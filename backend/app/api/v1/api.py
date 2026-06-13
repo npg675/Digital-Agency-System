@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, users, templates, pages, media, leads, analytics, campaigns, client_notes, campaign_tasks, notifications, activities, client_services, client_tasks, service_roles, workflows, appointments, calendar, invoices, portal, quotations
+from app.api.v1.endpoints import auth, users, templates, pages, media, leads, analytics, campaigns, client_notes, campaign_tasks, notifications, activities, client_services, client_tasks, service_roles, workflows, appointments, calendar, invoices, portal, quotations, marketing_assets, billing
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -23,3 +23,5 @@ api_router.include_router(calendar.router, prefix="/calendar", tags=["calendar"]
 api_router.include_router(invoices.router, prefix="/invoices", tags=["invoices"])
 api_router.include_router(portal.router, prefix="/portal", tags=["portal"])
 api_router.include_router(quotations.router, prefix="/quotations", tags=["quotations"])
+api_router.include_router(marketing_assets.router, prefix="/marketing-assets", tags=["marketing_assets"])
+api_router.include_router(billing.router, prefix="/billing", tags=["billing"])

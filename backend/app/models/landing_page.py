@@ -58,12 +58,15 @@ class LandingPage(Base, TimestampMixin):
     # Auto-Responder
     autoresponder_subject = Column(String, nullable=True)
     autoresponder_body = Column(String, nullable=True)
+    default_sequence_id = Column(Uuid(as_uuid=True), ForeignKey("marketing_sequences.id", ondelete="SET NULL"), nullable=True)
     
     status = Column(Enum(PageStatus), default=PageStatus.DRAFT, nullable=False)
 
     # A/B Testing
     is_ab_test_primary = Column(Boolean, default=False, nullable=False)
     ab_test_variant_of_id = Column(Uuid(as_uuid=True), ForeignKey("landing_pages.id", ondelete="SET NULL"), nullable=True)
+    ab_test_auto_optimize = Column(Boolean, default=True, nullable=False)
+    ab_test_traffic_weight = Column(Integer, default=50, nullable=False) # Only used if auto_optimize is False
 
     # Localization
     language_code = Column(String, default="en", nullable=False)
@@ -75,6 +78,7 @@ class LandingPage(Base, TimestampMixin):
     campaign = relationship("Campaign", back_populates="pages")
     leads = relationship("Lead", back_populates="landing_page", cascade="all, delete-orphan")
     page_views = relationship("PageView", back_populates="landing_page", cascade="all, delete-orphan")
+    default_sequence = relationship("MarketingSequence")
 
 class LandingPageSection(Base):
     __tablename__ = "landing_page_sections"

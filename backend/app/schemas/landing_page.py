@@ -56,10 +56,13 @@ class LandingPageBase(BaseModel):
     # Auto-Responder
     autoresponder_subject: Optional[str] = None
     autoresponder_body: Optional[str] = None
+    default_sequence_id: Optional[UUID] = None
     
     status: PageStatus = PageStatus.DRAFT
     is_ab_test_primary: bool = False
     ab_test_variant_of_id: Optional[UUID] = None
+    ab_test_auto_optimize: bool = True
+    ab_test_traffic_weight: int = 50
     language_code: str = "en"
     translation_of_id: Optional[UUID] = None
 
@@ -104,10 +107,13 @@ class LandingPageUpdate(BaseModel):
     # Auto-Responder
     autoresponder_subject: Optional[str] = None
     autoresponder_body: Optional[str] = None
+    default_sequence_id: Optional[UUID] = None
     
     status: Optional[PageStatus] = None
     is_ab_test_primary: Optional[bool] = None
     ab_test_variant_of_id: Optional[UUID] = None
+    ab_test_auto_optimize: Optional[bool] = None
+    ab_test_traffic_weight: Optional[int] = None
     language_code: Optional[str] = None
     translation_of_id: Optional[UUID] = None
 

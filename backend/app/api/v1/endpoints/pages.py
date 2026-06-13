@@ -193,6 +193,61 @@ def resolve_ab_test_variant(db: Session, page: LandingPage, visitor_id: Optional
         return page
         
     all_pages = [page] + variants
+    
+    # Auto-Optimization Logic (Multi-Armed Bandit)
+    if page.ab_test_auto_optimize:
+        from app.models.lead import Lead
+        from app.models.page_view import PageView
+        from sqlalchemy import func
+        
+        stats = []
+        total_views = 0
+        for p in all_pages:
+            views = db.query(func.count(PageView.id)).filter(PageView.landing_page_id == p.id).scalar() or 0
+            leads = db.query(func.count(Lead.id)).filter(Lead.landing_page_id == p.id).scalar() or 0
+            rate = (leads / views) if views > 0 else 0
+            stats.append({'page': p, 'views': views, 'rate': rate})
+            total_views += views
+            
+        stats.sort(key=lambda x: x['rate'], reverse=True)
+        
+        winner = None
+        if total_views > 100: # Minimum threshold to start optimizing
+            best = stats[0]
+            second = stats[1] if len(stats) > 1 else None
+            
+            # If the best has >50 views and a clear lead
+            if best['views'] > 50 and (not second or best['rate'] > second['rate'] * 1.1):
+                winner = best['page']
+        
+        if winner:
+            # 80% chance to return winner (Exploit), 20% to explore
+            if random.random() < 0.8:
+                return winner
+            else:
+                others = [p for p in all_pages if p.id != winner.id]
+                return random.choice(others) if others else winner
+                
+    else:
+        # Strict Traffic Weight (Manual Control)
+        # ab_test_traffic_weight represents the % for the Primary Page.
+        if visitor_id:
+            idx = int(hashlib.md5(visitor_id.encode()).hexdigest(), 16) % 100
+            if idx < page.ab_test_traffic_weight:
+                return page
+            else:
+                if variants:
+                    v_idx = (idx - page.ab_test_traffic_weight) % len(variants)
+                    return variants[v_idx]
+                return page
+        else:
+            r = random.randint(0, 99)
+            if r < page.ab_test_traffic_weight:
+                return page
+            else:
+                return random.choice(variants) if variants else page
+
+    # Fallback to purely equal distribution
     if visitor_id:
         idx = int(hashlib.md5(visitor_id.encode()).hexdigest(), 16) % len(all_pages)
         return all_pages[idx]
@@ -576,3 +631,101 @@ def save_as_template(
     db.add(template)
     db.commit()
     return {"message": "Saved as template successfully"}
+
+@router.get("/{id}/ab-test-results")
+def get_ab_test_results(
+    *,
+    db: Session = Depends(deps.get_db),
+    id: uuid.UUID,
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """Get A/B test results and conversion rates for a page and its variants."""
+    page = db.query(LandingPage).filter(LandingPage.id == id).first()
+    if not page:
+        raise HTTPException(status_code=404, detail="Landing page not found")
+        
+    check_staff_page_access(db, page, current_user)
+    
+    primary_id = page.ab_test_variant_of_id if page.ab_test_variant_of_id else page.id
+    primary = db.query(LandingPage).filter(LandingPage.id == primary_id).first()
+    variants = db.query(LandingPage).filter(LandingPage.ab_test_variant_of_id == primary_id).all()
+    
+    all_pages = [primary] + variants
+    from app.models.lead import Lead
+    from app.models.page_view import PageView
+    from sqlalchemy import func
+    
+    results = []
+    for p in all_pages:
+        views = db.query(func.count(PageView.id)).filter(PageView.landing_page_id == p.id).scalar() or 0
+        leads = db.query(func.count(Lead.id)).filter(Lead.landing_page_id == p.id).scalar() or 0
+        rate = (leads / views * 100) if views > 0 else 0
+        results.append({
+            "id": p.id,
+            "name": p.name,
+            "is_primary": p.id == primary_id,
+            "views": views,
+            "leads": leads,
+            "conversion_rate": rate,
+            "status": p.status,
+            "traffic_weight": p.ab_test_traffic_weight
+        })
+        
+    return {
+        "auto_optimize": primary.ab_test_auto_optimize,
+        "primary_id": primary.id,
+        "variants": results
+    }
+
+@router.post("/{id}/declare-winner")
+def declare_ab_test_winner(
+    *,
+    db: Session = Depends(deps.get_db),
+    id: uuid.UUID,
+    winner_id: uuid.UUID,
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """End A/B test by promoting the winner to primary and archiving others."""
+    if current_user.role == UserRole.CLIENT:
+        raise HTTPException(status_code=403, detail="Clients cannot declare test winners")
+
+    page = db.query(LandingPage).filter(LandingPage.id == id).first()
+    if not page:
+        raise HTTPException(status_code=404, detail="Landing page not found")
+        
+    check_staff_page_access(db, page, current_user)
+    
+    primary_id = page.ab_test_variant_of_id if page.ab_test_variant_of_id else page.id
+    primary = db.query(LandingPage).filter(LandingPage.id == primary_id).first()
+    variants = db.query(LandingPage).filter(LandingPage.ab_test_variant_of_id == primary_id).all()
+    
+    all_pages = [primary] + variants
+    winner = next((p for p in all_pages if p.id == winner_id), None)
+    if not winner:
+        raise HTTPException(status_code=404, detail="Winner variant not found in this test")
+        
+    # Promote winner
+    winner.is_ab_test_primary = True
+    winner.ab_test_variant_of_id = None
+    winner.status = PageStatus.PUBLISHED
+    
+    # Archive the rest
+    for p in all_pages:
+        if p.id != winner.id:
+            p.status = PageStatus.ARCHIVED
+            p.is_ab_test_primary = False
+            
+    # Log the action
+    from app.models.activity_log import ActivityLog
+    log = ActivityLog(
+        user_id=current_user.id,
+        action="AB_TEST_WINNER_DECLARED",
+        entity_type="LANDING_PAGE",
+        entity_id=str(winner.id),
+        details=f"Admin {current_user.email} declared '{winner.name}' as the winner of the A/B test."
+    )
+    db.add(log)
+    
+    db.commit()
+    db.refresh(winner)
+    return winner

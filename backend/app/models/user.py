@@ -82,4 +82,14 @@ class User(Base, TimestampMixin):
     google_refresh_token = Column(String, nullable=True)
     google_token_expiry = Column(DateTime, nullable=True)
 
+    # SaaS Billing (Platform -> Admin/Client)
+    stripe_customer_id = Column(String, nullable=True)
+    stripe_subscription_id = Column(String, nullable=True)
+    subscription_status = Column(String, nullable=True) # e.g. active, past_due, canceled
+    subscription_tier = Column(String, nullable=True) # e.g. BASIC, PRO
+    
+    # Agency Billing (Admin -> Client)
+    agency_stripe_secret_key = Column(String, nullable=True)
+    agency_stripe_publishable_key = Column(String, nullable=True)
+
     manager = relationship("User", remote_side=[id], backref="clients")

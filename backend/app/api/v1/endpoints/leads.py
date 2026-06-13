@@ -13,6 +13,7 @@ from app.schemas.lead import Lead as LeadSchema, LeadCreate, LeadUpdate
 import smtplib
 from email.message import EmailMessage
 from app.models.user import UserRole
+from app.models.marketing_asset import LeadSequence, SequenceStatus
 import requests
 
 router = APIRouter()
@@ -256,6 +257,19 @@ def create_lead(
                 page.name,
                 lead.name
             )
+            
+        # Native Autoresponder Engine (Marketing Sequence)
+        if page.default_sequence_id:
+            from datetime import datetime
+            lead_seq = LeadSequence(
+                lead_id=lead.id,
+                sequence_id=page.default_sequence_id,
+                current_step_index=0,
+                next_execution_time=datetime.utcnow(),
+                status=SequenceStatus.ACTIVE
+            )
+            db.add(lead_seq)
+            db.commit()
             
     return lead
 

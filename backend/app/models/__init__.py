@@ -18,3 +18,5 @@ from .workflow import WorkflowTemplate, WorkflowTaskTemplate
 from .appointment import Appointment
 from .invoice import Invoice
 from .quotation import Quotation, QuotationItem, QuotationLog
+from .marketing_asset import MarketingAsset, MarketingSequence, MarketingSequenceStep, MarketingAssetType, StepType, LeadSequence, SequenceStatus
+from .subscription_plan import SubscriptionPlan

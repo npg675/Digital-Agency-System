@@ -7,7 +7,7 @@ from app.models.lead import Lead
 from app.models.user import User, UserRole
 from app.core.email import send_smtp_email
 from app.core.email_templates import get_appointment_reminder_template, get_followup_template
-
+from app.models.marketing_asset import LeadSequence, SequenceStatus, MarketingSequenceStep, MarketingSequence, StepType
 scheduler = BackgroundScheduler()
 
 def send_email_notification(host_user: User, to_email: str, subject: str, html_message: str):
@@ -111,6 +111,67 @@ def process_continuous_followups():
         
     db.close()
 
+def process_autoresponder_sequences():
+    print("Running process_autoresponder_sequences...")
+    db = SessionLocal()
+    now = datetime.utcnow()
+    
+    try:
+        active_sequences = db.query(LeadSequence).filter(
+            LeadSequence.status == SequenceStatus.ACTIVE,
+            LeadSequence.next_execution_time <= now
+        ).all()
+        
+        for lead_seq in active_sequences:
+            lead = lead_seq.lead
+            if not lead:
+                continue
+                
+            # Fetch the sequence steps sorted by day_offset
+            steps = db.query(MarketingSequenceStep).filter(
+                MarketingSequenceStep.sequence_id == lead_seq.sequence_id
+            ).order_by(MarketingSequenceStep.day_offset.asc()).all()
+            
+            if lead_seq.current_step_index >= len(steps):
+                lead_seq.status = SequenceStatus.COMPLETED
+                continue
+                
+            current_step = steps[lead_seq.current_step_index]
+            
+            # Simple variables replacement
+            subject = current_step.subject_line or ""
+            body = current_step.body_content or ""
+            
+            subject = subject.replace("{name}", lead.name)
+            body = body.replace("{name}", lead.name)
+            
+            agency_admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+            if agency_admin and current_step.step_type == StepType.EMAIL:
+                # Wrap in simple HTML for sending
+                html_body = f"<div style='font-family: Arial, sans-serif; white-space: pre-wrap;'>{body}</div>"
+                send_email_notification(agency_admin, lead.email, subject, html_body)
+            elif current_step.step_type == StepType.SMS:
+                if lead.phone:
+                    send_whatsapp_notification(lead.phone, body)
+                    
+            # Update sequence pointers
+            lead_seq.current_step_index += 1
+            
+            if lead_seq.current_step_index >= len(steps):
+                lead_seq.status = SequenceStatus.COMPLETED
+            else:
+                next_step = steps[lead_seq.current_step_index]
+                # Calculate new offset delta (difference between next step offset and current step offset)
+                delta_days = next_step.day_offset - current_step.day_offset
+                lead_seq.next_execution_time = now + timedelta(days=delta_days)
+                
+        db.commit()
+    except Exception as e:
+        print(f"Error processing autoresponder: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
 def start_scheduler():
     if not scheduler.running:
         # Run every 5 minutes
@@ -127,6 +188,14 @@ def start_scheduler():
             trigger=IntervalTrigger(hours=1),
             id='continuous_followups',
             name='Continuous Followups',
+            replace_existing=True,
+        )
+        # Run autoresponder every 10 minutes
+        scheduler.add_job(
+            process_autoresponder_sequences,
+            trigger=IntervalTrigger(minutes=10),
+            id='autoresponder_sequences',
+            name='Autoresponder Drip Sequences',
             replace_existing=True,
         )
         scheduler.start()

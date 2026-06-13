@@ -7,7 +7,7 @@ class ActivityLog(Base, TimestampMixin):
     __tablename__ = "activity_logs"
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    user_id = Column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     
     # What was done (e.g. "LOGIN", "CREATE_NOTE", "UPDATE_USER", "HANDOVER")
     action = Column(String, nullable=False, index=True)
