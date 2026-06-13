@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: landingforge_dev
     ports:
-      - "5432:5432"
+      - "5433:5433"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -20,7 +20,7 @@ services:
       dockerfile: Dockerfile
     container_name: landingforge_backend
     ports:
-      - "8000:8000"
+      - "8001:8001"
     environment:
       - DATABASE_URL=postgresql://landingforge:password@postgres:5432/landingforge_dev
       - SECRET_KEY=supersecretkey_change_in_production
@@ -29,7 +29,7 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-your_google_client_id_here}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-your_google_client_secret_here}
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-http://localhost:8000/api/v1/calendar/callback}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3001}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-your_openai_api_key_here}
     depends_on:
       - postgres
@@ -41,7 +41,7 @@ services:
       dockerfile: Dockerfile
     container_name: landingforge_frontend
     ports:
-      - "3000:3000"
+      - "3001:3001"
     environment:
       # In production, this should point to your domain. If using nginx proxy, it might be /api/v1 or https://yourdomain.com/api/v1
       - NEXT_PUBLIC_API_URL=/api/v1
@@ -53,7 +53,7 @@ services:
     image: nginx:alpine
     container_name: landingforge_nginx
     ports:
-      - "80:80"
+      - "8081:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
