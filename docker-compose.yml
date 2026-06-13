@@ -19,8 +19,6 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: landingforge_backend
-    volumes:
-      - ./backend:/app
     ports:
       - "8000:8000"
     environment:
@@ -31,25 +29,20 @@ services:
     depends_on:
       - postgres
     restart: unless-stopped
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: landingforge_frontend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+      # In production, this should point to your domain. If using nginx proxy, it might be /api/v1 or https://yourdomain.com/api/v1
+      - NEXT_PUBLIC_API_URL=/api/v1
     depends_on:
       - backend
     restart: unless-stopped
-    command: npm run dev
 
   nginx:
     image: nginx:alpine
