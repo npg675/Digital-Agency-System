@@ -10,7 +10,7 @@ import {
   Play, Pause, SkipBack, Scissors, Type, Music, Image as ImageIcon,
   Download, Loader2, ArrowLeft, Volume2, Save, Undo, Plus, Trash2,
   SlidersHorizontal, CloudUpload, HardDrive, Upload, Sparkles, X, Layers,
-  Keyboard
+  Keyboard, Magnet
 } from "lucide-react";
 
 // --- VideoClip type ---
@@ -72,6 +72,7 @@ export default function VideoEditorPage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const [globalTime, setGlobalTime] = useState(0);
   const [duration, setDuration] = useState(1); // avoid / 0
   
   const [ffmpeg, setFfmpeg] = useState<FFmpeg | null>(null);
@@ -138,6 +139,17 @@ export default function VideoEditorPage() {
     initialStart: number;
     initialEnd: number;
   } | null>(null);
+
+  const [clipDragState, setClipDragState] = useState<{
+    clipId: string;
+    type: 'move' | 'trimStart' | 'trimEnd';
+    startX: number;
+    initialStart: number;
+    initialDuration: number;
+    initialTrimStart: number;
+    initialTrimEnd: number;
+    fileDuration: number;
+  } | null>(null);
   
   // Drag to reorder clips
   const [draggedClipIdx, setDraggedClipIdx] = useState<number | null>(null);
@@ -148,6 +160,13 @@ export default function VideoEditorPage() {
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showTrimPanel, setShowTrimPanel] = useState(false);
+  
+  const [isSnappingEnabled, setIsSnappingEnabled] = useState(true);
+  const isSnappingEnabledRef = useRef(true);
+  useEffect(() => { isSnappingEnabledRef.current = isSnappingEnabled; }, [isSnappingEnabled]);
+  
+  const globalTimeRef = useRef(0);
+  useEffect(() => { globalTimeRef.current = globalTime; }, [globalTime]);
 
   // Toast notification
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" | "info" } | null>(null);
@@ -172,8 +191,9 @@ export default function VideoEditorPage() {
         });
         const data = await res.json();
     // when a remote video is found, turn it into clip 0
+    const video = Array.isArray(data) ? data.find((v: any) => String(v.id) === videoId) : data;
     if (video && video.video_url) {
-      const clip: VideoClip = { id: "remote-0", name: video.title || "Video", url: video.video_url, fileDuration: 0, duration: 0, trimStart: 0, trimEnd: 0, color: CLIP_COLORS[0] };
+      const clip: VideoClip = { id: "remote-0", name: video.title || "Video", url: video.video_url, fileDuration: 0, duration: 0, trimStart: 0, trimEnd: 0, color: "#3b82f6", startTime: 0, trackId: "v1" };
       setClips([clip]);
       setVideoUrl(video.video_url);
       setOriginalVideoUrl(video.video_url);
@@ -451,6 +471,119 @@ export default function VideoEditorPage() {
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [assetDragState, totalDuration, canvasAssets, refreshAssets, handleTimeUpdate]);
+
+  // Clip Drag & Trim Logic
+  useEffect(() => {
+    if (!clipDragState) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!tracksAreaRef.current) return;
+      const rect = tracksAreaRef.current.getBoundingClientRect();
+      const trackWidth = rect.width - 24; 
+      const deltaPx = e.clientX - clipDragState.startX;
+      const deltaTime = (deltaPx / trackWidth) * (totalDuration || 1);
+
+      let hoverTrackId: string | undefined;
+      if (clipDragState.type === 'move') {
+         const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+         const trackEl = target?.closest('[data-track-id]');
+         if (trackEl) hoverTrackId = trackEl.getAttribute('data-track-id') || undefined;
+      }
+
+      setClips(prev => {
+        let snapPoints = [0, globalTimeRef.current];
+        prev.forEach(c => {
+           if (c.id !== clipDragState.clipId) {
+             snapPoints.push(c.startTime);
+             snapPoints.push(c.startTime + c.duration);
+           }
+        });
+        const SNAP_THRESHOLD = (8 / trackWidth) * (totalDuration || 1); // 8px threshold
+
+        return prev.map(c => {
+          if (c.id !== clipDragState.clipId) return c;
+
+          if (clipDragState.type === 'move') {
+            let newStart = Math.max(0, clipDragState.initialStart + deltaTime);
+            let newEnd = newStart + clipDragState.initialDuration;
+            
+            if (isSnappingEnabledRef.current) {
+               let closestStartSnap = snapPoints.find(p => Math.abs(p - newStart) < SNAP_THRESHOLD);
+               let closestEndSnap = snapPoints.find(p => Math.abs(p - newEnd) < SNAP_THRESHOLD);
+               if (closestStartSnap !== undefined) newStart = closestStartSnap;
+               else if (closestEndSnap !== undefined) newStart = closestEndSnap - clipDragState.initialDuration;
+            }
+            
+            return { ...c, startTime: newStart, trackId: hoverTrackId || c.trackId };
+          } else if (clipDragState.type === 'trimStart') {
+            let newStartTime = clipDragState.initialStart + deltaTime;
+            let currentDeltaTime = deltaTime;
+            
+            if (isSnappingEnabledRef.current) {
+               let closestStartSnap = snapPoints.find(p => Math.abs(p - newStartTime) < SNAP_THRESHOLD);
+               if (closestStartSnap !== undefined) {
+                  currentDeltaTime = closestStartSnap - clipDragState.initialStart;
+                  newStartTime = closestStartSnap;
+               }
+            }
+            
+            let newTrimStart = clipDragState.initialTrimStart + currentDeltaTime;
+            
+            if (newTrimStart < 0) {
+               const over = -newTrimStart;
+               newTrimStart = 0;
+               newStartTime += over;
+            }
+            if (newTrimStart >= clipDragState.initialTrimEnd - 0.2) {
+               newTrimStart = clipDragState.initialTrimEnd - 0.2;
+               newStartTime = clipDragState.initialStart + (newTrimStart - clipDragState.initialTrimStart);
+            }
+            
+            return {
+               ...c,
+               startTime: newStartTime,
+               trimStart: newTrimStart,
+               duration: clipDragState.initialTrimEnd - newTrimStart
+            };
+
+          } else if (clipDragState.type === 'trimEnd') {
+            let currentDeltaTime = deltaTime;
+            let newEndTime = clipDragState.initialStart + clipDragState.initialDuration + currentDeltaTime;
+            
+            if (isSnappingEnabledRef.current) {
+               let closestEndSnap = snapPoints.find(p => Math.abs(p - newEndTime) < SNAP_THRESHOLD);
+               if (closestEndSnap !== undefined) {
+                  currentDeltaTime = closestEndSnap - (clipDragState.initialStart + clipDragState.initialDuration);
+               }
+            }
+            
+            let newTrimEnd = clipDragState.initialTrimEnd + currentDeltaTime;
+            if (newTrimEnd > clipDragState.fileDuration) {
+               newTrimEnd = clipDragState.fileDuration;
+            }
+            if (newTrimEnd <= clipDragState.initialTrimStart + 0.2) {
+               newTrimEnd = clipDragState.initialTrimStart + 0.2;
+            }
+            return {
+               ...c,
+               trimEnd: newTrimEnd,
+               duration: newTrimEnd - clipDragState.initialTrimStart
+            };
+          }
+          return c;
+        });
+      });
+    };
+
+    const handleMouseUp = () => setClipDragState(null);
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [clipDragState, totalDuration]);
 
 
 
@@ -768,7 +901,11 @@ export default function VideoEditorPage() {
       }
 
       const baseScalePad = `scale=${aspectRatio.ffmpegScale}:force_original_aspect_ratio=decrease,pad=${aspectRatio.ffmpegScale}:(ow-iw)/2:(oh-ih)/2`;
-      const zoomCropScale = videoZoom > 1.01 ? `,crop=iw/${videoZoom}:ih/${videoZoom},scale=${aspectRatio.ffmpegScale}` : "";
+      const zoomCropScale = videoZoom > 1.01 
+        ? `,crop=iw/${videoZoom}:ih/${videoZoom},scale=${aspectRatio.ffmpegScale}` 
+        : videoZoom < 0.99 
+        ? `,scale=iw*${videoZoom}:ih*${videoZoom},pad=${aspectRatio.ffmpegScale}:(ow-iw)/2:(oh-ih)/2` 
+        : "";
         
       let chromaFilter = enableChromaKey ? `,colorkey=${chromaKeyColor}:${chromaKeySimilarity}:0.0` : "";
       const scaleFilter = baseScalePad + zoomCropScale + chromaFilter;
@@ -1344,7 +1481,7 @@ export default function VideoEditorPage() {
               <div className="border-t border-zinc-800 pt-4 space-y-4">
                 <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Fine Tune</p>
                 {[
-                  { label: "Zoom",       value: videoZoom,  min: 1,  max: 3, step: 0.05, display: Math.round((videoZoom - 1) * 100), setter: setVideoZoom },
+                  { label: "Zoom",       value: videoZoom,  min: 0.1,  max: 3, step: 0.05, display: Math.round((videoZoom - 1) * 100), setter: setVideoZoom },
                   { label: "Brightness", value: brightness, min: -1, max: 1, step: 0.05, display: Math.round(brightness * 100), setter: setBrightness },
                   { label: "Contrast",   value: contrast,   min: 0,  max: 2, step: 0.05, display: Math.round((contrast - 1) * 100), setter: setContrast },
                   { label: "Saturation", value: saturate,   min: 0,  max: 3, step: 0.05, display: Math.round((saturate - 1) * 100), setter: setSaturate },
@@ -1456,6 +1593,16 @@ export default function VideoEditorPage() {
                   refreshAssets();
                 }
               }} className="p-1.5 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded transition-colors" title="Clear All"><Trash2 className="w-4 h-4" /></button>
+              
+              <div className="w-px h-4 bg-zinc-700 mx-1" />
+              <button 
+                onClick={() => setIsSnappingEnabled(!isSnappingEnabled)} 
+                className={`p-1.5 rounded transition-colors ${isSnappingEnabled ? 'bg-indigo-500/20 text-indigo-400' : 'hover:bg-zinc-800 text-zinc-400 hover:text-white'}`} 
+                title={isSnappingEnabled ? "Snapping Enabled" : "Snapping Disabled"}
+              >
+                <Magnet className="w-4 h-4" />
+              </button>
+
               <div className="w-px h-4 bg-zinc-700 mx-1" />
               <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md transition-colors">
                 <Plus className="w-3.5 h-3.5" /> Add Clip
@@ -1468,7 +1615,7 @@ export default function VideoEditorPage() {
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 bg-zinc-950 px-2 py-1 rounded-md border border-zinc-800">
                 <span className="text-[10px] text-zinc-500 font-bold uppercase">Zoom</span>
-                <input type="range" min={1} max={5} step={0.1} value={timelineZoom} onChange={e => setTimelineZoom(+e.target.value)} className="w-20 h-1 accent-indigo-500" />
+                <input type="range" min={0.1} max={5} step={0.1} value={timelineZoom} onChange={e => setTimelineZoom(+e.target.value)} className="w-20 h-1 accent-indigo-500" />
               </div>
               <div className="text-xs font-mono text-zinc-500">
                 {clips.length} clip{clips.length !== 1 ? "s" : ""} · {totalDuration.toFixed(1)}s
@@ -1481,7 +1628,7 @@ export default function VideoEditorPage() {
             <div 
               ref={tracksAreaRef}
               className="relative p-3 space-y-2 h-full"
-              style={{ width: `${timelineZoom * 100}%`, minWidth: '100%' }}
+              style={{ width: `${timelineZoom * 100}%`, minWidth: timelineZoom < 1 ? 'auto' : '100%' }}
               onClick={(e) => { 
                 // Deselect if clicking empty space
                 if (e.target === e.currentTarget) setSelectedAssetId(null); 
@@ -1511,12 +1658,26 @@ export default function VideoEditorPage() {
             {/* VIDEO CLIP TRACKS */}
             <div className="space-y-1">
               {videoTracks.map((track, tIdx) => (
-                <div key={track.id} className="h-14 rounded-lg flex relative border border-zinc-800/50 bg-zinc-900/50">
-                  <div className="w-14 shrink-0 flex flex-col items-center justify-center bg-zinc-900 border-r border-zinc-800 rounded-l-lg z-10 gap-0.5 relative">
+                <div key={track.id} data-track-id={track.id} className="h-14 rounded-lg flex relative border border-zinc-800/50 bg-zinc-900/50">
+                  <div className="w-14 shrink-0 flex flex-col items-center justify-center bg-zinc-900 border-r border-zinc-800 rounded-l-lg z-10 gap-0.5 relative group">
                     <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
                     <span className="text-[9px] text-indigo-400 font-bold">{track.name}</span>
+                    
+                    {videoTracks.length > 1 && (
+                      <button 
+                        onClick={() => {
+                           setVideoTracks(videoTracks.filter(t => t.id !== track.id));
+                           setClips(clips.filter(c => c.trackId !== track.id));
+                        }}
+                        className="absolute top-1 right-1 z-20 w-4 h-4 bg-red-500/80 rounded flex items-center justify-center hover:bg-red-600 transition-colors shadow opacity-0 group-hover:opacity-100" 
+                        title="Remove Track"
+                      >
+                        <X className="w-2.5 h-2.5 text-white" />
+                      </button>
+                    )}
+
                     {tIdx === videoTracks.length - 1 && (
-                       <button onClick={() => setVideoTracks([...videoTracks, { id: `v${videoTracks.length + 1}`, name: `V${videoTracks.length + 1}` }])}
+                       <button onClick={() => setVideoTracks([...videoTracks, { id: `v${Date.now()}`, name: `V${videoTracks.length + 1}` }])}
                                className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 z-20 w-5 h-5 bg-zinc-800 rounded flex items-center justify-center hover:bg-indigo-600 transition-colors shadow border border-zinc-700" title="Add Video Track">
                           <Plus className="w-3 h-3 text-white" />
                        </button>
@@ -1532,13 +1693,39 @@ export default function VideoEditorPage() {
                           key={clip.id}
                           className={`absolute top-1 bottom-1 rounded-md flex items-center px-1.5 cursor-move transition-colors shadow-sm ${isSelected ? 'bg-indigo-500/30 border border-indigo-400/60 ring-1 ring-indigo-400 z-10' : 'bg-zinc-800 border border-zinc-700 hover:bg-zinc-700'}`}
                           style={{ left: `${leftPct}%`, width: `${widthPct}%`, minWidth: '40px' }}
-                          onClick={(e) => {
+                          onMouseDown={(e) => {
                              e.stopPropagation();
+                             setClipDragState({
+                               clipId: clip.id, type: 'move', startX: e.clientX,
+                               initialStart: clip.startTime, initialDuration: clip.duration,
+                               initialTrimStart: clip.trimStart || 0, initialTrimEnd: clip.trimEnd || clip.fileDuration,
+                               fileDuration: clip.fileDuration
+                             });
                              handleSeek({ target: { value: clip.startTime.toString() } } as any);
                           }}
                         >
-                          <span className={`text-[10px] font-medium truncate pointer-events-none ${isSelected ? 'text-indigo-200' : 'text-zinc-300'}`}>{clip.name}</span>
-                          <span className="text-[10px] text-zinc-500 ml-auto shrink-0 pointer-events-none">{clip.duration ? `${clip.duration.toFixed(1)}s` : "…"}</span>
+                          <div className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-indigo-400/50 rounded-l-md z-20"
+                               onMouseDown={(e) => {
+                                 e.stopPropagation();
+                                 setClipDragState({ clipId: clip.id, type: 'trimStart', startX: e.clientX, initialStart: clip.startTime, initialDuration: clip.duration, initialTrimStart: clip.trimStart || 0, initialTrimEnd: clip.trimEnd || clip.fileDuration, fileDuration: clip.fileDuration });
+                               }}
+                          />
+                          <div className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-indigo-400/50 rounded-r-md z-20"
+                               onMouseDown={(e) => {
+                                 e.stopPropagation();
+                                 setClipDragState({ clipId: clip.id, type: 'trimEnd', startX: e.clientX, initialStart: clip.startTime, initialDuration: clip.duration, initialTrimStart: clip.trimStart || 0, initialTrimEnd: clip.trimEnd || clip.fileDuration, fileDuration: clip.fileDuration });
+                               }}
+                          />
+                          
+                          <WaveformRenderer 
+                            url={clip.url} 
+                            duration={clip.duration} 
+                            trimStart={clip.trimStart || 0} 
+                            fileDuration={clip.fileDuration} 
+                          />
+
+                          <span className={`text-[10px] font-medium truncate pointer-events-none z-10 ${isSelected ? 'text-indigo-200' : 'text-zinc-300'}`}>{clip.name}</span>
+                          <span className="text-[10px] text-zinc-500 ml-auto shrink-0 pointer-events-none z-10">{clip.duration ? `${clip.duration.toFixed(1)}s` : "…"}</span>
                           
                           <button 
                             onClick={(e) => { e.stopPropagation(); deleteClip(clip.id); }} 
