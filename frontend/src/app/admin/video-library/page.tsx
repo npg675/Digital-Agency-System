@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   Film, Loader2, Search, Filter, Download, ExternalLink, Copy,
   CheckCircle2, X, AlertCircle, Clock, RefreshCw, Play, Tag,
-  ThumbsUp, MessageSquare, Eye, Trash2, Send, ChevronDown, Sparkles, Image as ImageIcon, Scissors, Edit, Check
+  ThumbsUp, MessageSquare, Eye, Trash2, Send, ChevronDown, Sparkles, Image as ImageIcon, Scissors, Edit, Check, SlidersHorizontal
 } from "lucide-react";
 import Link from "next/link";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -222,6 +222,9 @@ export default function VideoLibraryPage() {
           <button onClick={fetchVideos} className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg text-sm font-medium text-zinc-700 dark:text-zinc-300 transition-colors">
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>
+          <Link href="/admin/video-editor/new" className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-lg text-sm font-semibold transition-all shadow hover:shadow-indigo-500/30">
+            <SlidersHorizontal className="w-4 h-4" /> Video Editor
+          </Link>
           <Link href="/admin/video-studio" className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors">
             + Create Video
           </Link>
@@ -275,7 +278,16 @@ export default function VideoLibraryPage() {
               <div key={video.id} className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-all overflow-hidden group flex flex-col">
                 <div className="relative bg-zinc-950 aspect-video flex items-center justify-center">
                   {video.video_status === "COMPLETED" && video.video_url ? (
-                    <><video src={video.video_url} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" muted preload="metadata" />
+                    <>
+                      <video
+                        src={video.video_url}
+                        playsInline
+                        muted
+                        preload="metadata"
+                        onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
+                        onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
+                        className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                      />
                       <button onClick={() => setPreviewVideo(video)} className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30"><div className="w-14 h-14 bg-white/90 rounded-full flex items-center justify-center shadow-lg"><Play className="w-6 h-6 text-zinc-900 ml-1" /></div></button>
                     </>
                   ) : video.video_status === "PROCESSING" ? (
@@ -321,6 +333,16 @@ export default function VideoLibraryPage() {
                       </div>
                     </div>
                   </div>
+                  {/* PROMINENT VIDEO EDITOR CTA */}
+                  {video.video_status === "COMPLETED" && video.video_url && (
+                    <Link
+                      href={`/admin/video-editor/${video.id}`}
+                      className="mt-3 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl font-bold text-sm text-white transition-all bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-md hover:shadow-indigo-500/30 hover:scale-[1.02] active:scale-100"
+                    >
+                      <SlidersHorizontal className="w-4 h-4" />
+                      Open in Video Editor
+                    </Link>
+                  )}
                 </div>
               </div>
             );
@@ -336,7 +358,13 @@ export default function VideoLibraryPage() {
               <div><p className="font-semibold text-zinc-100 text-sm truncate">{previewVideo.title}</p><p className="text-xs text-zinc-400">{PROVIDER_LABELS[previewVideo.video_provider || ""]?.label}</p></div>
               <div className="flex items-center gap-2"><a href={previewVideo.video_url} download target="_blank" rel="noreferrer" className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg"><Download className="w-4 h-4" /></a><a href={previewVideo.video_url} target="_blank" rel="noreferrer" className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg"><ExternalLink className="w-4 h-4" /></a><button onClick={() => setPreviewVideo(null)} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg"><X className="w-4 h-4" /></button></div>
             </div>
-            <video src={previewVideo.video_url} controls autoPlay className="w-full max-h-[70vh] bg-black" />
+            <video
+              src={previewVideo.video_url}
+              controls
+              autoPlay
+              playsInline
+              className="w-full max-h-[70vh] bg-black"
+            />
             <div className="px-4 py-3 bg-zinc-900 border-t border-zinc-800"><p className="text-xs text-zinc-400 line-clamp-2">{previewVideo.content}</p></div>
           </div>
         </div>

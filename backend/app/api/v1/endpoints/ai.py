@@ -1,5 +1,5 @@
 from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.api import deps
@@ -16,6 +16,9 @@ try:
     from google import genai
 except ImportError:
     genai = None
+
+import tempfile
+import os
 
 router = APIRouter()
 
@@ -79,6 +82,77 @@ def generate_ai_text(admin: User, prompt: str, max_tokens: int = 500) -> str:
         except Exception as e:
             traceback.print_exc()
             raise HTTPException(status_code=500, detail=f"OpenAI API error: {str(e)}")
+
+@router.post("/transcribe")
+async def transcribe_audio(
+    file: UploadFile = File(...),
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    admin = db.query(User).filter(User.role == "ADMIN").first()
+    if not admin:
+        raise HTTPException(status_code=400, detail="Admin user not found")
+        
+    if not OpenAI:
+        raise HTTPException(status_code=500, detail="OpenAI package not installed")
+    if not getattr(admin, "openai_key", None):
+        raise HTTPException(status_code=400, detail="OpenAI key not configured for Whisper API")
+
+    client = OpenAI(api_key=admin.openai_key)
+    
+    # Save uploaded file to temp file for OpenAI SDK
+    try:
+        suffix = os.path.splitext(file.filename)[1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+            
+        with open(tmp_path, "rb") as audio_file:
+            response = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                response_format="verbose_json",
+                timestamp_granularities=["word"]
+            )
+            
+        os.remove(tmp_path)
+        
+        # Format the response to be an array of words/segments
+        return {
+            "text": response.text,
+            "words": response.words if hasattr(response, 'words') else []
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Whisper Transcription Error: {str(e)}")
+
+@router.post("/remove-bg")
+async def remove_background(
+    file: UploadFile = File(...),
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    try:
+        from rembg import remove
+        from PIL import Image
+        import io
+        from fastapi.responses import StreamingResponse
+
+        content = await file.read()
+        input_image = Image.open(io.BytesIO(content))
+        output_image = remove(input_image)
+        
+        img_byte_arr = io.BytesIO()
+        output_image.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+        
+        return StreamingResponse(img_byte_arr, media_type="image/png")
+    except ImportError:
+        raise HTTPException(status_code=500, detail="rembg package not installed on server.")
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Background Removal Error: {str(e)}")
 
 @router.post("/social-caption")
 def generate_social_captions(

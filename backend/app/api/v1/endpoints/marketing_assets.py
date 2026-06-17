@@ -559,3 +559,61 @@ def update_asset_approval(
     db.commit()
     db.refresh(asset)
     return asset
+
+from fastapi import UploadFile, File, Form
+import os
+import shutil
+
+@router.post("/export", response_model=MarketingAssetResponse)
+async def export_video_asset(
+    file: UploadFile = File(...),
+    destination: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Handle exported video from the Video Editor.
+    destination: 'library' or 'gcp'
+    """
+    # 1. Save locally to /uploads/videos
+    os.makedirs("uploads/videos", exist_ok=True)
+    filename = f"{uuid.uuid4()}_{file.filename}"
+    local_path = os.path.join("uploads/videos", filename)
+    
+    with open(local_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    public_url = f"{os.getenv('NEXT_PUBLIC_API_URL', 'http://localhost:8000/api/v1').replace('/api/v1', '')}/uploads/videos/{filename}"
+
+    # 2. If GCP, upload to Google Cloud Storage
+    if destination == "gcp":
+        try:
+            from google.cloud import storage
+            # Assumes GOOGLE_APPLICATION_CREDENTIALS is set or running on GCP
+            # or we could use the user's API key if we had a GCS key, but standard is ADC.
+            client = storage.Client()
+            bucket_name = os.getenv("GCP_BUCKET_NAME", "agency-video-exports")
+            bucket = client.bucket(bucket_name)
+            blob = bucket.blob(f"exports/{filename}")
+            blob.upload_from_filename(local_path)
+            blob.make_public()
+            public_url = blob.public_url
+        except Exception as e:
+            # Fallback to local URL if GCP fails (e.g. missing credentials)
+            print("GCP Upload failed, falling back to local storage:", e)
+
+    # 3. Save as a new Asset in the library
+    new_asset = MarketingAsset(
+        asset_type=MarketingAssetType.VIDEO,
+        industry_category="General",
+        title=f"Edited Video - {filename[:8]}",
+        content="Exported from Video Editor",
+        video_url=public_url,
+        video_status="COMPLETED"
+    )
+    
+    db.add(new_asset)
+    db.commit()
+    db.refresh(new_asset)
+    
+    return new_asset
