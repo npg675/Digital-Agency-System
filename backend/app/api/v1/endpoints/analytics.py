@@ -1,4 +1,4 @@
-from typing import Any, List, Dict
+from typing import Any
 from fastapi import APIRouter, Depends, Request, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -11,9 +11,9 @@ from app.models.lead import Lead, LeadStatus
 from app.models.page_view import PageView
 from app.models.user import User, UserRole
 from app.schemas.analytics import (
-    DashboardAnalytics, DailyStats, PageViewCreate, 
-    ComprehensiveReport, CampaignReport, ClientReport, LeadFunnel, OverviewStats,
-    StaffPerformance, ClientProgressReport, ReportTask, ReportSquadMember
+    DashboardAnalytics, PageViewCreate, ComprehensiveReport, 
+    CampaignReport, ClientReport, LeadFunnel, OverviewStats, ClientProgressReport,
+    ReportTask, ReportSquadMember
 )
 
 router = APIRouter()
@@ -355,3 +355,66 @@ def generate_client_progress_report(
         in_progress_tasks=in_progress_tasks,
         overview=overview
     )
+
+import random
+
+@router.get("/video-performance")
+def get_video_performance(
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user)
+) -> Any:
+    """Mock video performance analytics data."""
+    # In a real system, this would aggregate data from YouTube/Meta/TikTok APIs
+    # For now, we mock the leaderboard
+    mock_data = {
+        "overview": {
+            "total_views": random.randint(15000, 50000),
+            "avg_watch_time": f"{random.randint(45, 90)}s",
+            "overall_ctr": f"{random.uniform(2.5, 6.8):.1f}%",
+            "engagement_rate": f"{random.uniform(4.0, 12.0):.1f}%"
+        },
+        "leaderboard": [
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Why Your Agency Needs AI Automation in 2026",
+                "platform": "YouTube",
+                "views": random.randint(5000, 15000),
+                "ctr": f"{random.uniform(4.0, 8.0):.1f}%",
+                "watch_time_pct": f"{random.randint(60, 85)}%",
+                "status": "PUBLISHED"
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Stop Losing Leads to Bad Follow-up",
+                "platform": "TikTok",
+                "views": random.randint(8000, 25000),
+                "ctr": f"{random.uniform(3.0, 6.0):.1f}%",
+                "watch_time_pct": f"{random.randint(40, 70)}%",
+                "status": "PUBLISHED"
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "title": "3 Secrets to Scaling Your B2B Sales",
+                "platform": "LinkedIn",
+                "views": random.randint(2000, 8000),
+                "ctr": f"{random.uniform(5.0, 10.0):.1f}%",
+                "watch_time_pct": f"{random.randint(50, 90)}%",
+                "status": "PUBLISHED"
+            }
+        ]
+    }
+    return mock_data
+
+@router.get("/ai-insights")
+def get_ai_analytics_insights(
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user)
+) -> Any:
+    """Mock AI Insights generator based on analytics."""
+    insights = [
+        "Your 'Urgent/FOMO' toned videos are outperforming 'Professional' ones by 32% in CTR.",
+        "Short-form content on TikTok is driving the most raw views, but LinkedIn videos have a 4x higher lead conversion rate.",
+        "Videos under 60 seconds have a 25% higher completion rate. Consider trimming your top-of-funnel content.",
+        "Thumbnails with bold yellow text overlays are getting 15% more clicks this week."
+    ]
+    return {"insights": random.sample(insights, k=2)}

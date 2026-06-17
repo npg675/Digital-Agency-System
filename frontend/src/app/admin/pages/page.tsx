@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Plus, Search, MoreVertical, Edit2, Copy, Trash2, Eye, Split, Languages } from "lucide-react";
+import { Plus, Search, MoreVertical, Edit2, Copy, Trash2, Eye, Split, Languages, BarChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
@@ -44,6 +44,7 @@ export default function PagesList() {
   const [editingPage, setEditingPage] = useState<any>(null);
   const [customDomain, setCustomDomain] = useState("");
   const [webhookUrl, setWebhookUrl] = useState("");
+  const [aiSystemPrompt, setAiSystemPrompt] = useState("");
 
   useEffect(() => {
     const fetchPagesAndConfig = async () => {
@@ -171,6 +172,7 @@ export default function PagesList() {
     setEditingPage(page);
     setCustomDomain(page.custom_domain || "");
     setWebhookUrl(page.webhook_url || "");
+    setAiSystemPrompt(page.ai_system_prompt || "");
     setIsSettingsOpen(true);
   };
 
@@ -187,6 +189,7 @@ export default function PagesList() {
         body: JSON.stringify({
           custom_domain: customDomain || null,
           webhook_url: webhookUrl || null,
+          ai_system_prompt: aiSystemPrompt || null,
         })
       });
       if (res.ok) {
@@ -253,6 +256,23 @@ export default function PagesList() {
                 Data will be sent via POST whenever a lead submits a form.
               </p>
             </div>
+            {user?.role === 'ADMIN' && (
+              <div className="space-y-2 pt-4 border-t border-zinc-200">
+                <Label htmlFor="aiSystemPrompt" className="text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-2">
+                  ✨ AI Auto-Responder Prompt
+                </Label>
+                <textarea 
+                  id="aiSystemPrompt" 
+                  value={aiSystemPrompt}
+                  onChange={(e) => setAiSystemPrompt(e.target.value)}
+                  placeholder="e.g. You are an assistant for a dental clinic. Thank the lead and try to book them for a checkup."
+                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 min-h-[100px]"
+                />
+                <p className="text-xs text-zinc-500">
+                  Instruct the AI on how to reply to leads from this specific page. (Global AI Auto-Responder must be enabled in Settings).
+                </p>
+              </div>
+            )}
             <Button type="submit" className="w-full">Save Settings</Button>
           </form>
         </DialogContent>
@@ -386,6 +406,11 @@ export default function PagesList() {
                               <DropdownMenuItem className="cursor-pointer flex items-center" onClick={() => handleCreateVariant(page.id)}>
                                 <Split className="w-4 h-4 mr-2" /> Create A/B Variant
                               </DropdownMenuItem>
+                              {page.is_ab_test_primary && (
+                                <DropdownMenuItem render={<Link href={`/admin/pages/ab-test/${page.id}`} className="cursor-pointer flex items-center text-indigo-600" />}>
+                                  <BarChart className="w-4 h-4 mr-2" /> A/B Test Dashboard
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem className="cursor-pointer flex items-center" onClick={() => handleCreateTranslation(page.id)}>
                                 <Languages className="w-4 h-4 mr-2" /> Create Translation
                               </DropdownMenuItem>

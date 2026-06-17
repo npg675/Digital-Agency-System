@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useCrossTabSync, useSyncStore } from "@/store/useSyncStore";
 import { Search, Plus, FileText, CheckCircle, Clock, AlertCircle, X } from "lucide-react";
 import { format } from "date-fns";
 
@@ -31,6 +32,8 @@ export default function AdminInvoicesPage() {
   const [isCreatingClient, setIsCreatingClient] = useState(false);
   const [clientServices, setClientServices] = useState<any[]>([]);
   const { token } = useAuthStore();
+  const syncVersion = useSyncStore(s => s.version);
+  const { broadcastSync } = useCrossTabSync();
 
   // Form State
   const [formData, setFormData] = useState({
@@ -77,7 +80,7 @@ export default function AdminInvoicesPage() {
     if (token) {
       Promise.all([fetchInvoices(), fetchClients()]).finally(() => setLoading(false));
     }
-  }, [token]);
+  }, [token, syncVersion]);
 
   useEffect(() => {
     const fetchServices = async () => {
@@ -164,6 +167,7 @@ export default function AdminInvoicesPage() {
           new_client_first_name: "", new_client_last_name: "", new_client_email: "", new_client_password: ""
         });
         fetchInvoices(); // Refresh
+        broadcastSync();
       } else {
         alert("Failed to create invoice");
       }

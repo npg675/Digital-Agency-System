@@ -11,6 +11,7 @@ import { SocialsSection } from "@/components/public/SocialsSection";
 import { PricingSection } from "@/components/public/PricingSection";
 import { FAQSection } from "@/components/public/FAQSection";
 import { CTASection } from "@/components/public/CTASection";
+import { CheckoutSection } from "@/components/public/CheckoutSection";
 import { PageViewTracker } from "@/components/public/PageViewTracker";
 import { CookieBanner } from "@/components/public/CookieBanner";
 import { LanguageSwitcher } from "@/components/public/LanguageSwitcher";
@@ -102,6 +103,7 @@ export default async function LandingPage({
       case "Pricing": return <PricingSection key={section.id} config={section.config} />;
       case "FAQ": return <FAQSection key={section.id} config={section.config} />;
       case "CTA": return <CTASection key={section.id} config={section.config} />;
+      case "Checkout": return <CheckoutSection key={section.id} config={section.config} pageId={page.id} />;
       default: return null;
     }
   };

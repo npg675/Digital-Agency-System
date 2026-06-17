@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from typing import Dict, Any
 
 from app.database import get_db
 from app.api.deps import get_current_active_user
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.models.client_service import ClientService
 from app.models.client_task import ClientTask
 from app.models.appointment import Appointment

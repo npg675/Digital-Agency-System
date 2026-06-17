@@ -1,5 +1,4 @@
 import os
-import shutil
 import uuid
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
@@ -10,6 +9,7 @@ from app.models.media import MediaAsset
 from app.models.user import User, UserRole
 from app.schemas.media import MediaAsset as MediaAssetSchema
 from sqlalchemy import func
+from app.services.storage import get_storage_service
 
 router = APIRouter()
 
@@ -29,29 +29,38 @@ async def upload_file(
     """
     file_ext = os.path.splitext(file.filename)[1] if file.filename else ""
     unique_filename = f"{uuid.uuid4()}{file_ext}"
-    file_path = os.path.join(UPLOAD_DIR, unique_filename)
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    size = os.path.getsize(file_path)
-
-    # Check limits
+    # We cannot measure file size before uploading to cloud via streams easily without reading it all.
+    # Instead we read it into memory or temp, check size, then upload.
+    # Or rely on standard read (fine for reasonable sizes, maybe not 1GB videos)
+    file_content = await file.read()
+    size = len(file_content)
+    
+    # Check limits BEFORE upload
     admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
     if admin:
         if size > admin.media_vault_file_size_limit_mb * 1024 * 1024:
-            os.remove(file_path)
             raise HTTPException(status_code=400, detail=f"File exceeds maximum allowed size of {admin.media_vault_file_size_limit_mb} MB.")
             
         if client_id:
             total_size_query = db.query(func.sum(MediaAsset.size)).filter(MediaAsset.client_id == client_id).scalar() or 0
             if total_size_query + size > admin.media_vault_total_size_limit_mb * 1024 * 1024:
-                os.remove(file_path)
                 raise HTTPException(status_code=400, detail=f"Upload would exceed the client's media vault quota of {admin.media_vault_total_size_limit_mb} MB.")
+
+    # Reset file pointer for the upload service
+    await file.seek(0)
+    
+    storage_service = get_storage_service()
+    try:
+        final_file_path = storage_service.upload(file, unique_filename)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload to storage provider: {str(e)}")
+
+
 
     media = MediaAsset(
         filename=file.filename,
-        filepath=file_path.replace("\\", "/"),
+        filepath=final_file_path,
         mimetype=file.content_type,
         size=size,
         client_id=client_id,
@@ -107,8 +116,8 @@ def delete_media(
     if current_user.role == UserRole.CLIENT and media.uploader_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not enough permissions")
         
-    if os.path.exists(media.filepath):
-        os.remove(media.filepath)
+    storage_service = get_storage_service()
+    storage_service.delete(media.filepath)
         
     db.delete(media)
     db.commit()

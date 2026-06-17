@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useCrossTabSync, useSyncStore } from "@/store/useSyncStore";
 import { Search, Calendar, Clock, MoreVertical, Trash2, CalendarPlus, X, Save, MessageSquare } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,6 +24,8 @@ export default function LeadsList() {
   const [leadNotes, setLeadNotes] = useState("");
   const [followupDate, setFollowupDate] = useState("");
   const { token, user } = useAuthStore();
+  const syncVersion = useSyncStore(s => s.version);
+  const { broadcastSync } = useCrossTabSync();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -59,7 +62,7 @@ export default function LeadsList() {
     if (token) {
       fetchData();
     }
-  }, [token]);
+  }, [token, syncVersion]);
 
   const handleDeleteLead = async (id: string) => {
     if (!confirm("Are you sure you want to delete this lead?")) return;
@@ -70,6 +73,7 @@ export default function LeadsList() {
       });
       if (res.ok) {
         setLeads(leads.filter(l => l.id !== id));
+        broadcastSync();
       } else {
         const err = await res.json();
         alert(`Failed to delete lead: ${err.detail || "Unknown error"}`);
@@ -91,11 +95,57 @@ export default function LeadsList() {
       });
       if (res.ok) {
         setLeads(leads.map(l => l.id === id ? { ...l, status: newStatus } : l));
+        broadcastSync();
       } else {
         alert("Failed to update lead status");
       }
     } catch (err) {
       alert("Network error");
+    }
+  };
+
+  const handleScoreAllLeads = async () => {
+    const unscoredLeads = leads.filter(l => !l.ai_score);
+    if (unscoredLeads.length === 0) {
+      alert("All leads are already scored!");
+      return;
+    }
+    setActionLoading('scoring');
+    let scoredCount = 0;
+    try {
+      for (const lead of unscoredLeads) {
+        // 1. Get Score from AI
+        const aiRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/ai/score-lead`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            lead_message: lead.message || "",
+            time_since_submission: new Date(lead.submitted_at).toISOString(),
+            has_phone: !!lead.phone
+          })
+        });
+        
+        if (aiRes.ok) {
+          const aiData = await aiRes.json();
+          // 2. Update Lead in DB
+          const updateRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/leads/${lead.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ ai_score: aiData.score, ai_score_reason: aiData.reason })
+          });
+          
+          if (updateRes.ok) {
+            setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, ai_score: aiData.score, ai_score_reason: aiData.reason } : l));
+            scoredCount++;
+          }
+        }
+      }
+      alert(`Successfully scored ${scoredCount} leads!`);
+      broadcastSync();
+    } catch (e) {
+      alert("Network error during scoring.");
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -157,6 +207,7 @@ export default function LeadsList() {
       if (res.ok) {
         setLeads(leads.map(l => l.id === selectedLead.id ? { ...l, notes: leadNotes } : l));
         alert("Notes saved successfully!");
+        broadcastSync();
       } else {
         alert("Failed to save notes");
       }
@@ -233,7 +284,7 @@ export default function LeadsList() {
         </div>
       </div>
 
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-2 justify-between">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500 dark:text-zinc-400" />
           <Input
@@ -242,6 +293,14 @@ export default function LeadsList() {
             className="pl-8"
           />
         </div>
+        <button 
+          onClick={handleScoreAllLeads}
+          disabled={actionLoading === 'scoring'}
+          className="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-semibold px-4 py-2 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50 text-sm"
+        >
+          <span className={actionLoading === 'scoring' ? 'animate-pulse' : ''}>✨</span>
+          {actionLoading === 'scoring' ? 'Scoring Leads...' : 'Score All Leads'}
+        </button>
       </div>
 
       <div className="border rounded-md bg-white">
@@ -249,6 +308,7 @@ export default function LeadsList() {
           <TableHeader>
             <TableRow>
               <TableHead>Date</TableHead>
+              <TableHead>Score</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Phone</TableHead>
@@ -260,13 +320,13 @@ export default function LeadsList() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
+                <TableCell colSpan={8} className="text-center py-8">
                   Loading leads...
                 </TableCell>
               </TableRow>
             ) : leads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-zinc-500">
+                <TableCell colSpan={8} className="text-center py-8 text-zinc-500">
                   No leads found yet.
                 </TableCell>
               </TableRow>
@@ -278,13 +338,26 @@ export default function LeadsList() {
                     openPanel(lead);
                   }
                 }}>
-                  <TableCell className="whitespace-nowrap text-zinc-500">
+                  <TableCell className="whitespace-nowrap text-zinc-500 text-xs">
                     {new Date(lead.submitted_at).toLocaleString(undefined, {
                       month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
                     })}
                   </TableCell>
-                  <TableCell className="font-medium">{lead.name}</TableCell>
-                  <TableCell>{lead.email}</TableCell>
+                  <TableCell>
+                    {lead.ai_score ? (
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        lead.ai_score === 'HOT' ? 'bg-red-100 text-red-700' :
+                        lead.ai_score === 'WARM' ? 'bg-orange-100 text-orange-700' :
+                        'bg-blue-100 text-blue-700'
+                      }`} title={lead.ai_score_reason}>
+                        {lead.ai_score}
+                      </span>
+                    ) : (
+                      <span className="text-zinc-300 text-[10px] font-bold uppercase">Unscored</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="font-medium text-sm">{lead.name}</TableCell>
+                  <TableCell className="text-sm">{lead.email}</TableCell>
                   <TableCell>{lead.phone || "-"}</TableCell>
                   <TableCell>
                     {pages[lead.landing_page_id] ? (

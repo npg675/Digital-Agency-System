@@ -28,6 +28,7 @@ export interface PageSettings {
   tos_url?: string;
   autoresponder_subject?: string | null;
   autoresponder_body?: string | null;
+  default_sequence_id?: string | null;
 }
 
 interface EditorState {

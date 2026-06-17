@@ -15,6 +15,8 @@ from email.message import EmailMessage
 from app.models.user import UserRole
 from app.models.marketing_asset import LeadSequence, SequenceStatus
 import requests
+from app.services.ai_responder import generate_and_send_ai_response
+from app.services.automation_engine import trigger_internal_event
 
 router = APIRouter()
 
@@ -196,6 +198,20 @@ def create_lead(
         }
         background_tasks.add_task(send_webhook, page.webhook_url, webhook_data)
         
+    # Dispatch Internal Native Automation Event
+    if page and page.client_id:
+        native_payload = {
+            "lead_id": str(lead.id),
+            "name": lead.name,
+            "email": lead.email,
+            "phone": lead.phone,
+            "message": lead.message,
+            "source": "Landing Page Submission",
+            "landing_page_id": str(lead.landing_page_id),
+            "landing_page_slug": page.slug if page else ""
+        }
+        background_tasks.add_task(trigger_internal_event, page.client_id, "lead_created", native_payload)
+        
     # Check if page has Mailchimp integration
     if page and page.mailchimp_api_key and page.mailchimp_server_prefix and page.mailchimp_list_id:
         background_tasks.add_task(
@@ -271,6 +287,10 @@ def create_lead(
             db.add(lead_seq)
             db.commit()
             
+        # AI Auto-Responder
+        if admin.ai_auto_respond_enabled:
+            background_tasks.add_task(generate_and_send_ai_response, str(lead.id), str(page.id))
+            
     return lead
 
 @router.delete("/{id}")
@@ -332,6 +352,10 @@ def update_lead(
         lead.status = lead_in.status
     if lead_in.notes is not None:
         lead.notes = lead_in.notes
+    if lead_in.ai_score is not None:
+        lead.ai_score = lead_in.ai_score
+    if lead_in.ai_score_reason is not None:
+        lead.ai_score_reason = lead_in.ai_score_reason
 
     db.add(lead)
     db.commit()

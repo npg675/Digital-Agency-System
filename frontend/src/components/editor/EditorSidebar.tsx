@@ -642,6 +642,20 @@ function VideoProperties({ config, onChange }: { config: any; onChange: (c: any)
   );
 }
 
+function VideoBubbleProperties({ config, onChange }: { config: any; onChange: (c: any) => void }) {
+  const set = (key: string, val: any) => onChange({ ...config, [key]: val });
+  const toggle = (key: string) => set(key, !config[key]);
+  return (
+    <div className="space-y-4">
+      <TextField label="Video URL (MP4 or YouTube)" value={config.videoUrl} onChange={(v) => set("videoUrl", v)} />
+      <SelectField label="Position" value={config.position || "bottom-right"} onChange={(v) => set("position", v)} options={[{value: "bottom-right", label: "Bottom Right"}, {value: "bottom-left", label: "Bottom Left"}]} />
+      <SelectField label="Size" value={config.size || "medium"} onChange={(v) => set("size", v)} options={[{value: "small", label: "Small"}, {value: "medium", label: "Medium"}, {value: "large", label: "Large"}]} />
+      <TextField label="Welcome Message" value={config.welcomeText} onChange={(v) => set("welcomeText", v)} hidden={config.hideWelcomeText} onToggleHide={() => toggle("hideWelcomeText")} />
+      <ColorField label="Button/Theme Color" value={config.buttonColor} onChange={(v) => set("buttonColor", v)} />
+    </div>
+  );
+}
+
 function SocialsProperties({ config, onChange }: { config: any; onChange: (c: any) => void }) {
   const set = (key: string, val: any) => onChange({ ...config, [key]: val });
   const toggle = (key: string) => set(key, !config[key]);
@@ -821,6 +835,21 @@ function PricingProperties({ config, onChange }: { config: any; onChange: (c: an
   );
 }
 
+function CheckoutProperties({ config, onChange }: { config: any; onChange: (c: any) => void }) {
+  const set = (key: string, val: any) => onChange({ ...config, [key]: val });
+  const toggle = (key: string) => set(key, !config[key]);
+  return (
+    <div className="space-y-4">
+      <TextField label="Headline" value={config.title} onChange={(v) => set("title", v)} hidden={config.hideTitle} onToggleHide={() => toggle("hideTitle")} />
+      <TextField label="Product / Price Description" value={config.productName} onChange={(v) => set("productName", v)} />
+      <TextField label="Amount (in cents)" value={config.amount} onChange={(v) => set("amount", parseInt(v) || 0)} />
+      <TextField label="Success Redirect URL" value={config.successUrl} onChange={(v) => set("successUrl", v)} />
+      <TextField label="Upsell Step ID (Optional)" value={config.upsellId} onChange={(v) => set("upsellId", v)} />
+      <ColorField label="Button Color" value={config.buttonColor} onChange={(v) => set("buttonColor", v)} />
+    </div>
+  );
+}
+
 function PropertiesPanel({ section }: { section: Section }) {
   const { updateSection } = useEditorStore();
   const onChange = (config: any) => updateSection(section.id, config);
@@ -833,10 +862,12 @@ function PropertiesPanel({ section }: { section: Section }) {
     case "Testimonials": return <TestimonialsProperties config={section.config} onChange={onChange} />;
     case "Contact": return <ContactProperties config={section.config} onChange={onChange} />;
     case "Video": return <VideoProperties config={section.config} onChange={onChange} />;
+    case "VideoBubble": return <VideoBubbleProperties config={section.config} onChange={onChange} />;
     case "Socials": return <SocialsProperties config={section.config} onChange={onChange} />;
     case "Pricing": return <PricingProperties config={section.config} onChange={onChange} />;
     case "FAQ": return <FAQProperties config={section.config} onChange={onChange} />;
     case "CTA": return <CTAProperties config={section.config} onChange={onChange} />;
+    case "Checkout": return <CheckoutProperties config={section.config} onChange={onChange} />;
     default: return <p className="text-xs text-zinc-500">No properties available for this section type.</p>;
   }
 }
@@ -845,7 +876,7 @@ function PropertiesPanel({ section }: { section: Section }) {
 const SECTION_ICONS: Record<string, string> = {
   Hero: "🦸", Features: "✨", Stats: "📊", About: "🏢",
   Gallery: "🖼️", Testimonials: "💬", Contact: "📩",
-  Video: "▶️", Socials: "🌐", Pricing: "💰", FAQ: "❓", CTA: "🎯"
+  Video: "▶️", VideoBubble: "💬", Socials: "🌐", Pricing: "💰", FAQ: "❓", CTA: "🎯", Checkout: "💳"
 };
 
 // ─── Main Sidebar ─────────────────────────────────────────────────────────
@@ -875,11 +906,15 @@ export function EditorSidebar({ isOpenOnMobile, onCloseMobile }: { isOpenOnMobil
         />
       )}
 
+      {/* Sidebar Hover Trigger (Desktop) */}
+      <div className="hidden md:block absolute inset-y-0 left-0 w-2 z-40 peer bg-transparent" />
+
       <div className={`
-        absolute md:relative z-40 inset-y-0 left-0
+        absolute z-50 inset-y-0 left-0
         w-72 border-r border-zinc-800 bg-zinc-900 flex flex-col h-full overflow-hidden
         transform transition-transform duration-200 ease-in-out
-        ${isOpenOnMobile ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+        ${isOpenOnMobile ? "translate-x-0" : "-translate-x-full"}
+        md:-translate-x-full md:peer-hover:translate-x-0 md:hover:translate-x-0
       `}>
         {/* Section List */}
         <div className="flex-1 flex flex-col min-h-0">

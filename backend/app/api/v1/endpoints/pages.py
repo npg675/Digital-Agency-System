@@ -517,14 +517,18 @@ def create_ab_test_variant(
     # Mark the original as primary if not already
     if not original_page.is_ab_test_primary:
         original_page.is_ab_test_primary = True
+        original_page.is_ab_test_active = True
+        original_page.variant_name = 'A'
 
     new_page = LandingPage(
-        name=f"{original_page.name} (Variant)",
+        name=f"{original_page.name} (Variant {counter})",
         slug=new_slug,
         industry=original_page.industry,
         client_id=original_page.client_id,
         status=PageStatus.PUBLISHED if original_page.status == PageStatus.PUBLISHED else PageStatus.DRAFT,
-        ab_test_variant_of_id=original_page.id
+        ab_test_variant_of_id=original_page.id,
+        is_ab_test_active=True,
+        variant_name=chr(65 + counter) if counter < 26 else f"Var {counter}" # A, B, C...
     )
     
     # Copy sections
@@ -663,6 +667,7 @@ def get_ab_test_results(
         results.append({
             "id": p.id,
             "name": p.name,
+            "variant_name": p.variant_name or ("A" if p.id == primary_id else "Variant"),
             "is_primary": p.id == primary_id,
             "views": views,
             "leads": leads,

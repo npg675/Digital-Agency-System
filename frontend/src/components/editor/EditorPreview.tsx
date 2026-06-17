@@ -496,6 +496,148 @@ function CTARenderer({ config }: { config: any }) {
   );
 }
 
+function CheckoutRenderer({ config }: { config: any }) {
+  if (config.isHidden) return null;
+  return (
+    <div className="py-20 px-8 bg-zinc-50 dark:bg-zinc-950 min-h-[600px] flex items-center justify-center">
+      <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl overflow-hidden border border-zinc-100 dark:border-zinc-800">
+        <div className="p-8 text-center bg-zinc-100/50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
+          <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">{config.title || "Complete Your Purchase"}</h2>
+          <p className="text-zinc-500 font-medium">{config.productName || "Premium Package"}</p>
+          <div className="text-4xl font-extrabold text-zinc-900 dark:text-white mt-4">
+            ${((config.amount || 9900) / 100).toFixed(2)}
+          </div>
+        </div>
+        <div className="p-8 space-y-6">
+          <div className="space-y-4 pointer-events-none opacity-75">
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Email</label>
+              <div className="w-full h-11 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Card Information</label>
+              <div className="w-full h-11 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-t-lg" />
+              <div className="flex w-full">
+                <div className="w-1/2 h-11 bg-zinc-50 dark:bg-zinc-950 border border-t-0 border-r-0 border-zinc-200 dark:border-zinc-700 rounded-bl-lg" />
+                <div className="w-1/2 h-11 bg-zinc-50 dark:bg-zinc-950 border border-t-0 border-zinc-200 dark:border-zinc-700 rounded-br-lg" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Name on card</label>
+              <div className="w-full h-11 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
+            </div>
+          </div>
+          <button
+            className="w-full py-4 rounded-xl font-bold text-white shadow-lg pointer-events-none"
+            style={{ backgroundColor: config.buttonColor || "#10b981" }}
+          >
+            Pay ${((config.amount || 9900) / 100).toFixed(2)}
+          </button>
+          <div className="flex justify-center items-center gap-2 text-zinc-400 text-xs">
+            <span className="w-4 h-4 rounded-full border border-zinc-300 flex items-center justify-center font-bold">🔒</span>
+            Guaranteed safe & secure checkout
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VideoBubbleRenderer({ config }: { config: any }) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (config.isHidden) return null;
+
+  const getYoutubeId = (url: string) => {
+    if (!url) return null;
+    const regExp = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([^&?\/]{11})/;
+    const match = url.match(regExp);
+    return match ? match[1] : null;
+  };
+
+  const youtubeId = getYoutubeId(config.videoUrl);
+  const isMp4 = config.videoUrl?.endsWith(".mp4");
+  
+  const positionClasses = config.position === "bottom-left" ? "bottom-6 left-6 items-start" : "bottom-6 right-6 items-end";
+  const sizeClasses = isExpanded ? "w-72 h-[400px] rounded-2xl" : config.size === "small" ? "w-32 h-32 rounded-full" : config.size === "large" ? "w-64 h-64 rounded-full" : "w-48 h-48 rounded-full";
+  const pointerTriangle = config.position === "bottom-left" ? "left-6" : "right-6";
+
+  return (
+    <div className={`fixed ${positionClasses} z-50 flex flex-col gap-3 pointer-events-none`}>
+      {/* Welcome Bubble */}
+      {!config.hideWelcomeText && config.welcomeText && !isExpanded && (
+        <div className={`bg-white text-zinc-900 px-4 py-2 rounded-2xl shadow-lg text-sm font-medium relative ${config.position === 'bottom-left' ? 'ml-2' : 'mr-2'} animate-bounce`}>
+          {config.welcomeText}
+          <div className={`absolute -bottom-2 ${pointerTriangle} w-4 h-4 bg-white transform rotate-45`} />
+        </div>
+      )}
+      
+      {/* Video Container */}
+      <div 
+        className={`relative ${sizeClasses} overflow-hidden shadow-2xl border-4 pointer-events-auto cursor-pointer transition-all duration-300 group`} 
+        style={{ borderColor: config.buttonColor || "#6366f1" }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        {youtubeId ? (
+          <iframe
+            className={`absolute top-0 left-0 w-[150%] h-[150%] -translate-x-[16.6%] -translate-y-[16.6%] pointer-events-none ${isExpanded ? 'opacity-80' : ''}`}
+            src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${youtubeId}`}
+            allow="autoplay; encrypted-media"
+          />
+        ) : isMp4 ? (
+          <video
+            className={`w-full h-full object-cover ${isExpanded ? 'opacity-80' : ''}`}
+            src={config.videoUrl}
+            autoPlay
+            muted
+            loop
+            playsInline
+          />
+        ) : (
+          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+             <span className="text-2xl">▶️</span>
+          </div>
+        )}
+
+        {/* Interactive Overlay (Tolstoy / VideoAsk Style) */}
+        <div className={`absolute inset-0 bg-black/40 flex flex-col items-center justify-end p-4 pb-6 transition-opacity duration-300 ${isExpanded || isHovered ? 'opacity-100' : 'opacity-0'}`}>
+          {isExpanded ? (
+            <div className="w-full space-y-2 animate-in slide-in-from-bottom-4">
+              <button 
+                className="w-full py-2.5 rounded-lg text-sm font-bold text-white shadow-lg hover:scale-105 transition-transform"
+                style={{ backgroundColor: config.buttonColor || "#6366f1" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                📅 Book a Call
+              </button>
+              <button 
+                className="w-full py-2.5 rounded-lg text-sm font-bold bg-white text-zinc-900 shadow-lg hover:scale-105 transition-transform"
+                onClick={(e) => e.stopPropagation()}
+              >
+                💬 Ask a Question
+              </button>
+              <button 
+                className="absolute top-2 right-2 w-8 h-8 bg-black/50 text-white rounded-full flex items-center justify-center hover:bg-black/80"
+                onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <div className="text-white font-bold text-sm tracking-wider flex items-center gap-2">
+              <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-white opacity-75"></span>
+              Click to Interact
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function renderSectionContent(section: any) {
   switch (section.type) {
     case "Hero": return <HeroRenderer config={section.config} />;
@@ -506,10 +648,12 @@ function renderSectionContent(section: any) {
     case "Testimonials": return <TestimonialsRenderer config={section.config} />;
     case "Contact": return <ContactRenderer config={section.config} />;
     case "Video": return <VideoRenderer config={section.config} />;
+    case "VideoBubble": return <VideoBubbleRenderer config={section.config} />;
     case "Socials": return <SocialsRenderer config={section.config} />;
     case "Pricing": return <PricingRenderer config={section.config} />;
     case "FAQ": return <FAQRenderer config={section.config} />;
     case "CTA": return <CTARenderer config={section.config} />;
+    case "Checkout": return <CheckoutRenderer config={section.config} />;
     default: return <div className="p-8 text-center text-zinc-500 border-dashed border-2 m-4 rounded-xl">Unknown section: {section.type}</div>;
   }
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useCrossTabSync, useSyncStore } from "@/store/useSyncStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +20,8 @@ import { Search } from "lucide-react";
 
 export default function CampaignsPage() {
   const { user, token } = useAuthStore();
+  const syncVersion = useSyncStore(s => s.version);
+  const { broadcastSync } = useCrossTabSync();
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -54,7 +57,7 @@ export default function CampaignsPage() {
           .catch(console.error);
       }
     }
-  }, [token, user]);
+  }, [token, user, syncVersion]);
 
   const handleCreate = async () => {
     try {
@@ -73,6 +76,7 @@ export default function CampaignsPage() {
         setShowModal(false);
         setFormData({ name: "", description: "" });
         fetchCampaigns();
+        broadcastSync();
       }
     } catch (err) {
       console.error(err);
@@ -87,6 +91,7 @@ export default function CampaignsPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchCampaigns();
+      broadcastSync();
     } catch (err) {
       console.error(err);
     }

@@ -180,6 +180,33 @@ const SECTION_TYPES = [
       tiktok: "",
     },
   },
+  {
+    type: "Checkout",
+    icon: "💳",
+    label: "Checkout Form",
+    desc: "Stripe payment form for 1-click purchases and upsells",
+    defaultConfig: {
+      title: "Complete Your Purchase",
+      productName: "Premium Package - $99",
+      amount: 9900,
+      successUrl: "",
+      upsellId: "",
+      buttonColor: "#10b981",
+    },
+  },
+  {
+    type: "VideoBubble",
+    icon: "💬",
+    label: "Interactive Video Bubble",
+    desc: "Floating interactive video widget in the corner of the screen",
+    defaultConfig: {
+      videoUrl: "https://www.w3schools.com/html/mov_bbb.mp4",
+      position: "bottom-right",
+      welcomeText: "Hey! Watch this quick message 👋",
+      buttonColor: "#6366f1",
+      size: "medium",
+    },
+  },
 ];
 
 interface AddSectionModalProps {

@@ -1,7 +1,6 @@
 import uuid
 from sqlalchemy import Column, String, Float, Uuid, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
-from datetime import datetime
 from app.models.base import Base, TimestampMixin
 
 class Invoice(Base, TimestampMixin):

@@ -1,15 +1,15 @@
 import os
 import stripe
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List
 from uuid import UUID
 
 from app.database import get_db
-from app.api.deps import get_current_user, get_current_active_user
+from app.api.deps import get_current_active_user
 from app.models.user import User, UserRole
 from app.models.invoice import Invoice
-from app.schemas.invoice import InvoiceCreate, InvoiceUpdate, InvoiceResponse
+from app.schemas.invoice import InvoiceCreate, InvoiceResponse
 
 router = APIRouter()
 

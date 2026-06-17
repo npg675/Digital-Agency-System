@@ -128,3 +128,26 @@
     @apply font-sans;
   }
 }
+
+@layer utilities {
+  .sidebar-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .sidebar-scroll {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .group:hover .sidebar-scroll::-webkit-scrollbar {
+    display: block;
+    width: 6px;
+  }
+  .group:hover .sidebar-scroll::-webkit-scrollbar-thumb {
+    background-color: oklch(0.556 0 0 / 50%); /* zinc-500 equivalent */
+    border-radius: 9999px;
+  }
+  .group:hover .sidebar-scroll {
+    -ms-overflow-style: auto;
+    scrollbar-width: thin;
+  }
+}

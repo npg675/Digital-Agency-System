@@ -1,7 +1,9 @@
 from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 import uuid
+from datetime import datetime
 
 from app.api import deps
 from app.models.user import User, UserRole
@@ -10,24 +12,43 @@ from app.services.stripe_service import StripeService
 
 router = APIRouter()
 
-@router.get("/plans")
+class PlanResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: str | None = None
+    agency_id: uuid.UUID | None = None
+    stripe_product_id: str | None = None
+    stripe_price_id: str | None = None
+    price_monthly: float
+    currency: str
+    is_active: bool
+    features: str | None = None
+    created_at: datetime
+    updated_at: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+@router.get("/plans", response_model=List[PlanResponse])
 def list_plans(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """Get active subscription plans. If user is CLIENT, gets plans created by their Admin."""
+    """Get active subscription plans."""
     query = db.query(SubscriptionPlan).filter(SubscriptionPlan.is_active == True)
     
     if current_user.role == UserRole.CLIENT and current_user.manager_id:
         # Show Agency plans
         query = query.filter(SubscriptionPlan.agency_id == current_user.manager_id)
+    elif current_user.role == UserRole.ADMIN:
+        # Show the Agency's own plans
+        query = query.filter(SubscriptionPlan.agency_id == current_user.id)
     else:
         # Show Platform SaaS plans
         query = query.filter(SubscriptionPlan.agency_id == None)
         
     return query.all()
 
-from pydantic import BaseModel
 class PlanCreate(BaseModel):
     name: str
     description: str = ""
@@ -35,7 +56,7 @@ class PlanCreate(BaseModel):
     price_monthly: float
     features: str = ""
 
-@router.post("/plans")
+@router.post("/plans", response_model=PlanResponse)
 def create_plan(
     *,
     db: Session = Depends(deps.get_db),

@@ -51,6 +51,16 @@ class MarketingAsset(Base, TimestampMixin):
     content = Column(Text, nullable=False)
     file_url = Column(String, nullable=True) # If it's a PDF lead magnet
 
+    # Video Generation Tracking
+    video_url = Column(String, nullable=True)
+    video_status = Column(String, default=None, nullable=True) # PENDING, PROCESSING, COMPLETED, FAILED
+    video_job_id = Column(String, nullable=True)
+    video_provider = Column(String, nullable=True) # heygen, synthesia, runway, google
+    
+    # Client Approval
+    approval_status = Column(String, nullable=True) # PENDING, APPROVED, REVISION
+    approval_note = Column(Text, nullable=True)
+
 class SequenceStatus(str, enum.Enum):
     ACTIVE = "ACTIVE"
     PAUSED = "PAUSED"

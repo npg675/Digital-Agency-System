@@ -4,7 +4,6 @@ Run with: python seed_marketing_assets.py
 """
 import sys
 import os
-import uuid
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

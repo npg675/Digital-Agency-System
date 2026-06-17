@@ -44,6 +44,7 @@ class QuotationCreate(QuotationBase):
     items: List[QuotationItemCreate] = []
 
 class QuotationUpdate(BaseModel):
+    client_id: Optional[UUID] = None
     status: Optional[str] = None
     total_amount: Optional[float] = None
     valid_until: Optional[datetime] = None
@@ -58,6 +59,8 @@ class QuotationClientResponse(BaseModel):
     last_name: Optional[str] = None
     email: Optional[str] = None
     company_name: Optional[str] = None
+    address: Optional[str] = None
+    phone_number: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

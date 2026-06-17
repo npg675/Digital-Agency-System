@@ -11,18 +11,24 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const router = useRouter();
   const pathname = usePathname();
 
-  const isPublicRoute = pathname?.startsWith("/portal/quote/");
+  // Course portal is publicly accessible for preview (no auth required to view)
+  const isPublicRoute = pathname?.startsWith("/portal/quote/") || pathname?.startsWith("/portal/courses/");
+  const isAdminPreviewing = user?.role === "ADMIN" || user?.role === "STAFF";
 
   useEffect(() => {
     if (isPublicRoute) return;
+    if (isAdminPreviewing) return;
+    
+    // Wait for hydration — if token is not yet resolved, don't redirect yet
+    if (token === undefined) return;
     
     // If not logged in or not a client, redirect
     if (!token) {
       router.push("/admin/login");
-    } else if (user?.role !== "CLIENT" && user?.role !== "ADMIN") {
+    } else if (user?.role !== "CLIENT") {
       router.push("/");
     }
-  }, [token, user, router, isPublicRoute]);
+  }, [token, user, router, isPublicRoute, isAdminPreviewing]);
 
   if (isPublicRoute) {
     return <>{children}</>;

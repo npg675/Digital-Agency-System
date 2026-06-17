@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status, Form, File, UploadFile
 from sqlalchemy.orm import Session, joinedload
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from app.database import get_db
@@ -9,7 +9,6 @@ from app.models.quotation import Quotation, QuotationItem, QuotationLog
 from app.schemas.quotation import QuotationCreate, QuotationUpdate, QuotationResponse
 from app.api.deps import get_current_user
 from app.core.email import send_smtp_email
-from app.core.config import settings
 
 router = APIRouter()
 
@@ -65,6 +64,35 @@ def get_public_quotation(
         }
 
     return quotation
+
+@router.get("/items/history", response_model=List[str])
+def get_quotation_items_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role == UserRole.CLIENT:
+        return []
+        
+    descriptions = db.query(QuotationItem.description).distinct().all()
+    # d is a tuple like ('Web Design',)
+    return [d[0] for d in descriptions if d[0] and d[0].strip()]
+
+@router.get("/subjects/history", response_model=List[str])
+def get_quotation_subjects_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role == UserRole.CLIENT:
+        return []
+        
+    customizations = db.query(Quotation.customization).filter(Quotation.customization.isnot(None)).all()
+    subjects = set()
+    for c in customizations:
+        if c[0] and "subject" in c[0] and c[0]["subject"]:
+            subjects.add(c[0]["subject"].strip())
+    
+    return list(subjects)
+
 
 @router.get("/{quotation_id}", response_model=QuotationResponse)
 def get_quotation(
@@ -174,6 +202,47 @@ def update_quotation(
     db.refresh(db_quotation)
     return db_quotation
 
+@router.post("/{quotation_id}/duplicate", response_model=QuotationResponse, status_code=status.HTTP_201_CREATED)
+def duplicate_quotation(
+    quotation_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role == UserRole.CLIENT:
+        raise HTTPException(status_code=403, detail="Clients cannot duplicate quotations")
+        
+    original = db.query(Quotation).filter(Quotation.id == quotation_id).first()
+    if not original:
+        raise HTTPException(status_code=404, detail="Quotation not found")
+        
+    new_quotation = Quotation(
+        client_id=original.client_id,
+        status="DRAFT",
+        total_amount=original.total_amount,
+        valid_until=original.valid_until,
+        template_name=original.template_name,
+        notes=original.notes,
+        customization=original.customization
+    )
+    db.add(new_quotation)
+    db.flush()
+    
+    for item in original.items:
+        new_item = QuotationItem(
+            quotation_id=new_quotation.id,
+            description=item.description,
+            quantity=item.quantity,
+            unit_price=item.unit_price,
+            tax_rate=item.tax_rate,
+            tax_amount=item.tax_amount,
+            total=item.total
+        )
+        db.add(new_item)
+        
+    db.commit()
+    db.refresh(new_quotation)
+    return new_quotation
+
 @router.delete("/{quotation_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_quotation(
     quotation_id: UUID,
@@ -191,7 +260,7 @@ def delete_quotation(
     db.commit()
     return None
 
-def send_quotation_email_task(quotation_id: UUID, admin_id: UUID):
+def send_quotation_email_task(quotation_id: UUID, admin_id: UUID, custom_email: str = None, format_type: str = "LINK", file_bytes: bytes = None):
     db = next(get_db())
     try:
         quotation = db.query(Quotation).filter(Quotation.id == quotation_id).first()
@@ -200,7 +269,8 @@ def send_quotation_email_task(quotation_id: UUID, admin_id: UUID):
             return
             
         client = quotation.client
-        if not client or not client.email:
+        target_email = custom_email or (client.email if client else None)
+        if not target_email:
             return
             
         agency_name = admin.agency_name or "Our Agency"
@@ -211,30 +281,62 @@ def send_quotation_email_task(quotation_id: UUID, admin_id: UUID):
         link = f"{frontend_url}/portal/quote/{quotation.id}"
         
         subject = f"New Quotation from {agency_name}"
-        html_content = f"""
-        <html>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                <h2>Hello {client.first_name or client.company_name or 'Client'},</h2>
-                <p>We have prepared a new quotation for you regarding your recent request.</p>
-                <p>Total Amount: <strong>${quotation.total_amount:,.2f}</strong></p>
-                <p>
-                    <a href="{link}" style="display: inline-block; padding: 10px 20px; background-color: #2563eb; color: #fff; text-decoration: none; border-radius: 5px;">
-                        View Full Quotation
-                    </a>
-                </p>
-                <p>If you have any questions, please reply to this email.</p>
-                <p>Best regards,<br>{agency_name}</p>
-            </body>
-        </html>
-        """
         
-        send_smtp_email(admin, client.email, subject, html_content)
+        # Format HTML content based on format_type
+        if format_type == "HTML":
+            items_html = ""
+            for item in quotation.items:
+                items_html += f"<tr><td style='padding:8px;border-bottom:1px solid #eee;'>{item.description}</td><td style='padding:8px;border-bottom:1px solid #eee;'>{item.quantity}</td><td style='padding:8px;border-bottom:1px solid #eee;'>${item.amount:,.2f}</td></tr>"
+            
+            html_content = f"""
+            <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                    <h2>Hello {client.first_name or client.company_name or 'Client'},</h2>
+                    <p>We have prepared a new quotation for you regarding your recent request.</p>
+                    <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+                        <tr style="background:#f9f9f9; text-align:left;">
+                            <th style="padding:8px; border-bottom:2px solid #ccc;">Item</th>
+                            <th style="padding:8px; border-bottom:2px solid #ccc;">Qty</th>
+                            <th style="padding:8px; border-bottom:2px solid #ccc;">Amount</th>
+                        </tr>
+                        {items_html}
+                    </table>
+                    <p>Total Amount: <strong>${quotation.total_amount:,.2f}</strong></p>
+                    <p>If you have any questions, please reply to this email.</p>
+                    <p>Best regards,<br>{agency_name}</p>
+                </body>
+            </html>
+            """
+        else:
+            # For LINK or PDF
+            html_content = f"""
+            <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                    <h2>Hello {client.first_name or client.company_name or 'Client'},</h2>
+                    <p>We have prepared a new quotation for you regarding your recent request.</p>
+                    <p>Total Amount: <strong>${quotation.total_amount:,.2f}</strong></p>
+                    <p>
+                        <a href="{link}" style="display: inline-block; padding: 10px 20px; background-color: #2563eb; color: #fff; text-decoration: none; border-radius: 5px;">
+                            View Full Quotation
+                        </a>
+                    </p>
+                    <p>If you have any questions, please reply to this email.</p>
+                    <p>Best regards,<br>{agency_name}</p>
+                </body>
+            </html>
+            """
+            
+        attachments = None
+        if format_type == "PDF" and file_bytes:
+            attachments = [{"filename": f"Quotation_QT-{str(quotation.id).split('-')[0].upper()}.pdf", "content": file_bytes}]
+        
+        send_smtp_email(admin, target_email, subject, html_content, attachments=attachments)
         
         # Log the action
         log = QuotationLog(
             quotation_id=quotation.id,
             action="SENT_VIA_EMAIL",
-            details=f"Sent to {client.email}"
+            details=f"Sent to {target_email}"
         )
         db.add(log)
         db.commit()
@@ -245,6 +347,10 @@ def send_quotation_email_task(quotation_id: UUID, admin_id: UUID):
 def send_quotation(
     quotation_id: UUID,
     background_tasks: BackgroundTasks,
+    method: str = Form("EMAIL"),
+    contact_info: Optional[str] = Form(None),
+    format_type: str = Form("LINK"),
+    file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -256,9 +362,41 @@ def send_quotation(
         raise HTTPException(status_code=404, detail="Quotation not found")
         
     db_quotation.status = "SENT"
+    
+    if method == "EMAIL":
+        file_bytes = None
+        if format_type == "PDF" and file:
+            file_bytes = file.file.read()
+        background_tasks.add_task(send_quotation_email_task, db_quotation.id, current_user.id, contact_info, format_type, file_bytes)
+    else:
+        log = QuotationLog(
+            quotation_id=db_quotation.id,
+            action=f"SENT_VIA_{method.upper()}",
+            details=f"Sent to {contact_info} (Format: {format_type})"
+        )
+        db.add(log)
+        
     db.commit()
     
-    # Send email in background
-    background_tasks.add_task(send_quotation_email_task, db_quotation.id, current_user.id)
-    
     return {"message": "Quotation sending initiated"}
+
+@router.delete("/{quotation_id}", status_code=status.HTTP_200_OK)
+def delete_quotation(
+    quotation_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role == UserRole.CLIENT:
+        raise HTTPException(status_code=403, detail="Clients cannot delete quotations")
+        
+    quotation = db.query(Quotation).filter(Quotation.id == quotation_id).first()
+    if not quotation:
+        raise HTTPException(status_code=404, detail="Quotation not found")
+        
+    if quotation.status != "DRAFT":
+        raise HTTPException(status_code=400, detail="Only DRAFT quotations can be deleted")
+        
+    db.delete(quotation)
+    db.commit()
+    return {"message": "Quotation deleted successfully"}
+

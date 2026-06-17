@@ -8,17 +8,25 @@ import { motion } from "framer-motion";
 
 export default function PortalDashboardPage() {
   const [data, setData] = useState<any>(null);
+  const [pendingVideos, setPendingVideos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { token } = useAuthStore();
 
   useEffect(() => {
     const fetchDashboard = async () => {
-      try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/portal/dashboard`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          setData(await res.json());
+        const [dashRes, videosRes] = await Promise.all([
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/portal/dashboard`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/marketing-assets/videos?approval_status=pending`, {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+        ]);
+        if (dashRes.ok) {
+          setData(await dashRes.json());
+        }
+        if (videosRes.ok) {
+          setPendingVideos(await videosRes.json());
         }
       } catch (err) {
         console.error(err);
@@ -30,8 +38,28 @@ export default function PortalDashboardPage() {
   }, [token]);
 
   if (loading) {
-    return <div className="p-8 text-gray-400">Loading your dashboard...</div>;
+    return <div className="p-8 text-gray-400 flex items-center gap-2"><div className="w-5 h-5 border-2 border-t-transparent border-blue-500 rounded-full animate-spin"></div>Loading your dashboard...</div>;
   }
+
+  const handleAction = async (videoId: string, status: string, note?: string) => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/marketing-assets/${videoId}/approval`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ approval_status: status, approval_note: note })
+      });
+      if (res.ok) {
+        setPendingVideos(prev => prev.filter(v => v.id !== videoId));
+      } else {
+        alert("Action failed.");
+      }
+    } catch (e) {
+      alert("Network error.");
+    }
+  };
 
   if (!data) {
     return <div className="p-8 text-red-400">Failed to load dashboard data.</div>;
@@ -85,6 +113,55 @@ export default function PortalDashboardPage() {
                   {task.due_date && <p className="text-sm text-gray-500">Due: {format(new Date(task.due_date), "MMM d, yyyy")}</p>}
                 </div>
               ))
+            )}
+          </div>
+        </div>
+
+        {/* Content Review (Pending Approvals) */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 col-span-1 lg:col-span-2">
+          <div className="flex items-center gap-3 mb-6">
+            <CheckSquare className="text-emerald-400" />
+            <h3 className="text-xl font-semibold text-white">Action Needed: Content Approvals</h3>
+          </div>
+          <div className="space-y-4">
+            {pendingVideos.length === 0 ? (
+              <p className="text-gray-500">No content pending your review.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {pendingVideos.map((video: any) => (
+                  <div key={video.id} className="bg-black/40 rounded-xl overflow-hidden border border-emerald-500/20">
+                    <div className="aspect-video bg-zinc-900 relative">
+                      {video.video_url ? (
+                        <video src={video.video_url} controls className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-zinc-600 text-sm">Processing...</div>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <h4 className="font-medium text-white mb-1 line-clamp-1">{video.title}</h4>
+                      <p className="text-xs text-gray-400 mb-4 line-clamp-2">{video.content}</p>
+                      
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => handleAction(video.id, 'approved')}
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium py-2 rounded-lg transition-colors"
+                        >
+                          Approve
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const note = prompt("What changes are needed?");
+                            if (note !== null) handleAction(video.id, 'revision', note);
+                          }}
+                          className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium py-2 rounded-lg transition-colors"
+                        >
+                          Request Revision
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>

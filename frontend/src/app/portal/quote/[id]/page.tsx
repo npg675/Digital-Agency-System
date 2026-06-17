@@ -53,6 +53,7 @@ export default function PublicQuotationPage() {
   const { id } = useParams();
   const [quotation, setQuotation] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   useEffect(() => {
     const fetchQuotation = async () => {
@@ -80,7 +81,8 @@ export default function PublicQuotationPage() {
   const clientName = cust.manual_name || `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Client";
   const clientCompany = cust.manual_company || c.company_name;
   const clientAddress = cust.manual_address || c.address;
-  const clientEmail = cust.manual_email || c.email;
+  const isSystemEmail = !c.email || c.email.endsWith('@system.example.com') || c.email.endsWith('@system.local');
+  const clientEmail = cust.manual_email || (isSystemEmail ? null : c.email);
   const currency = cust.currency || "$";
 
   const subtotal = quotation.items.reduce((sum: number, item: any) => sum + (item.quantity * item.unit_price), 0);
@@ -116,12 +118,34 @@ export default function PublicQuotationPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadPdf = async () => {
+    try {
+      setDownloadingPdf(true);
+      const res = await fetch(`/api/pdf?id=${id}`);
+      if (!res.ok) throw new Error("Failed to generate PDF");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Quotation_QT-${(id as string).split('-')[0].toUpperCase()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(url);
+      a.remove();
+    } catch (err) {
+      console.error(err);
+      alert("Error downloading PDF");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
-          @page { margin: 0 15mm; size: auto; }
-          body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          @page { margin: 0; size: A4 portrait; }
+          body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
       `}} />
       <div className="min-h-screen bg-[#f8f9fc] py-8 px-4 print:py-0 print:px-0 print:bg-white flex flex-col items-center font-sans">
@@ -130,6 +154,14 @@ export default function PublicQuotationPage() {
         <div className="w-[210mm] max-w-full flex justify-between items-center mb-6 print:hidden">
         <h1 className="text-lg font-bold text-gray-800">Preview Quotation</h1>
         <div className="flex gap-3">
+          <button 
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
+            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-800 border border-gray-200 text-sm font-bold rounded-lg hover:bg-gray-50 transition-all shadow-sm disabled:opacity-50"
+          >
+            <Download size={16} />
+            {downloadingPdf ? 'Generating PDF...' : 'Download PDF'}
+          </button>
           <button 
             onClick={handleDownloadHtml}
             className="flex items-center gap-2 px-4 py-2 bg-white text-gray-800 border border-gray-200 text-sm font-bold rounded-lg hover:bg-gray-50 transition-all shadow-sm"
@@ -142,7 +174,7 @@ export default function PublicQuotationPage() {
             className="flex items-center gap-2 px-5 py-2 bg-black text-white text-sm font-bold rounded-lg hover:shadow-lg transition-all"
           >
             <Printer size={16} />
-            Print / Save PDF
+            Print
           </button>
         </div>
       </div>
@@ -278,8 +310,8 @@ export default function PublicQuotationPage() {
                   <tr key={item.id || index} className="group hover:bg-gray-50/50 transition-colors">
                     <td className="py-0.5 px-1 text-gray-800 font-medium">{item.description}</td>
                     <td className="py-0.5 px-1 text-gray-600 text-center">{item.quantity}</td>
-                    <td className="py-0.5 px-1 text-gray-600 text-right">{currency}{item.unit_price.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                    <td className="py-0.5 px-1 text-gray-900 font-bold text-right">{currency}{item.total.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                    <td className="py-0.5 px-1 text-gray-600 text-right">{item.unit_price.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                    <td className="py-0.5 px-1 text-gray-900 font-bold text-right">{item.total.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                   </tr>
                 ))}
               </tbody>
@@ -324,7 +356,7 @@ export default function PublicQuotationPage() {
                 </div>
               )}
               <div className="flex justify-between items-center border-t border-gray-300 pt-2 text-sm font-black text-gray-900">
-                <span className="uppercase tracking-widest text-[10px]">Total Due</span>
+                <span className="uppercase tracking-widest text-[10px]">Total</span>
                 <span>{currency}{quotation.total_amount.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
               </div>
               

@@ -17,10 +17,14 @@ class LeadCreate(LeadBase):
 class LeadUpdate(BaseModel):
     status: Optional[str] = None
     notes: Optional[str] = None
+    ai_score: Optional[str] = None
+    ai_score_reason: Optional[str] = None
 
 class Lead(LeadBase):
     id: UUID
     landing_page_id: UUID
     submitted_at: datetime
+    ai_score: Optional[str] = None
+    ai_score_reason: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

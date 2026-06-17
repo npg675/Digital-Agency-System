@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, users, templates, pages, media, leads, analytics, campaigns, client_notes, campaign_tasks, notifications, activities, client_services, client_tasks, service_roles, workflows, appointments, calendar, invoices, portal, quotations, marketing_assets, billing
+from app.api.v1.endpoints import auth, users, templates, pages, media, leads, analytics, campaigns, client_notes, campaign_tasks, notifications, activities, client_services, client_tasks, service_roles, workflows, appointments, calendar, invoices, portal, quotations, marketing_assets, billing, backup, inbox, social, integrations, reputation, funnels, payments, automations, courses, ai, campaign_bundle
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -10,6 +10,7 @@ api_router.include_router(media.router, prefix="/media", tags=["media"])
 api_router.include_router(leads.router, prefix="/leads", tags=["leads"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(campaigns.router, prefix="/campaigns", tags=["campaigns"])
+api_router.include_router(campaign_bundle.router, prefix="/bundle-campaign", tags=["campaign_bundle"])
 api_router.include_router(client_notes.router, prefix="/client-notes", tags=["client_notes"])
 api_router.include_router(campaign_tasks.router, prefix="/campaign-tasks", tags=["campaign_tasks"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
@@ -25,3 +26,13 @@ api_router.include_router(portal.router, prefix="/portal", tags=["portal"])
 api_router.include_router(quotations.router, prefix="/quotations", tags=["quotations"])
 api_router.include_router(marketing_assets.router, prefix="/marketing-assets", tags=["marketing_assets"])
 api_router.include_router(billing.router, prefix="/billing", tags=["billing"])
+api_router.include_router(backup.router, prefix="/backup", tags=["backup"])
+api_router.include_router(inbox.router, prefix="/inbox", tags=["inbox"])
+api_router.include_router(social.router, prefix="/social-posts", tags=["social"])
+api_router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
+api_router.include_router(reputation.router, prefix="/reputation", tags=["reputation"])
+api_router.include_router(funnels.router, prefix="/funnels", tags=["funnels"])
+api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
+api_router.include_router(automations.router, prefix="/automations", tags=["automations"])
+api_router.include_router(courses.router, prefix="/courses", tags=["courses"])
+api_router.include_router(ai.router, prefix="/ai", tags=["ai"])

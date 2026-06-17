@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import Cropper from 'react-easy-crop';
-import { Upload, X, Check, Image as ImageIcon } from 'lucide-react';
+import { Upload, X, Check, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react';
 import getCroppedImg from '@/utils/cropImage';
 import { useAuthStore } from '@/store/useAuthStore';
 
@@ -95,11 +95,11 @@ export default function LogoUploader({ value, onChange, disabled }: LogoUploader
 
       {/* Preview Area */}
       <div 
-        onClick={triggerUpload}
-        className={`relative flex items-center justify-center w-40 h-40 rounded-xl overflow-hidden border-2 border-dashed ${disabled ? 'opacity-50 cursor-not-allowed border-zinc-800' : 'cursor-pointer border-white/20 hover:border-purple-500 transition-colors bg-black/20 group'}`}
+        onClick={!value ? triggerUpload : undefined}
+        className={`relative flex items-center justify-center w-40 h-40 rounded-xl overflow-hidden border-2 border-dashed ${disabled ? 'opacity-50 cursor-not-allowed border-zinc-800' : `border-white/20 hover:border-purple-500 transition-colors bg-black/20 group ${!value ? 'cursor-pointer' : ''}`}`}
       >
         {value ? (
-          <img src={value} alt="Logo Preview" className="w-full h-full object-contain" />
+          <img src={value} alt="Logo Preview" className="w-full h-full object-contain" crossOrigin="anonymous" />
         ) : (
           <div className="flex flex-col items-center text-zinc-500">
             <ImageIcon size={32} className="mb-2 opacity-50" />
@@ -109,10 +109,39 @@ export default function LogoUploader({ value, onChange, disabled }: LogoUploader
 
         {!disabled && (
           <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="flex items-center text-sm font-semibold text-white">
-              <Upload size={16} className="mr-2" />
-              {value ? "Change Logo" : "Upload Logo"}
-            </div>
+            {value ? (
+              <div className="flex gap-3">
+                <button 
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); triggerUpload(); }}
+                  className="p-2 bg-white/20 hover:bg-white/30 text-white rounded-full transition-colors"
+                  title="Upload New"
+                >
+                  <Upload size={18} />
+                </button>
+                <button 
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setImageSrc(value); setZoom(1); setCrop({x:0, y:0}); }}
+                  className="p-2 bg-white/20 hover:bg-white/30 text-white rounded-full transition-colors"
+                  title="Crop Image"
+                >
+                  <Pencil size={18} />
+                </button>
+                <button 
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onChange(""); }}
+                  className="p-2 bg-red-500/80 hover:bg-red-500 text-white rounded-full transition-colors"
+                  title="Remove Image"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center text-sm font-semibold text-white">
+                <Upload size={16} className="mr-2" />
+                Upload Logo
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -137,6 +166,9 @@ export default function LogoUploader({ value, onChange, disabled }: LogoUploader
                 image={imageSrc}
                 crop={crop}
                 zoom={zoom}
+                minZoom={0.1}
+                maxZoom={3}
+                restrictPosition={false}
                 aspect={1} // Assuming square or free crop. For logos, free crop might be better, but let's default to square or allow custom
                 onCropChange={setCrop}
                 onCropComplete={onCropComplete}
@@ -150,7 +182,7 @@ export default function LogoUploader({ value, onChange, disabled }: LogoUploader
                 <input
                   type="range"
                   value={zoom}
-                  min={1}
+                  min={0.1}
                   max={3}
                   step={0.1}
                   aria-labelledby="Zoom"

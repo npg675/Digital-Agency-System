@@ -6,7 +6,7 @@ import uuid
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy.orm import Session
-from app.database import engine, SessionLocal
+from app.database import SessionLocal
 from app.models.template import Template, TemplateSection, TemplateCategory
 
 def seed_real_estate_template():

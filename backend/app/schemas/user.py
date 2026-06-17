@@ -10,6 +10,7 @@ class UserBase(BaseModel):
     last_name: Optional[str] = None
     company_name: Optional[str] = None
     phone_number: Optional[str] = None
+    address: Optional[str] = None
     can_manage_users: Optional[bool] = False
     
     # Brand Vault
@@ -19,19 +20,33 @@ class UserBase(BaseModel):
     brand_twitter_url: Optional[str] = None
     brand_instagram_url: Optional[str] = None
     brand_linkedin_url: Optional[str] = None
+    brand_google_review_url: Optional[str] = None
     brand_tiktok_url: Optional[str] = None
     brand_whatsapp: Optional[str] = None
     brand_email: Optional[str] = None
     brand_notes: Optional[str] = None
+    brand_voice_profile: Optional[str] = None
+    
+    # Client Billing for Phase 5 (Funnels)
+    brand_stripe_secret_key: Optional[str] = None
+    brand_stripe_publishable_key: Optional[str] = None
     
     # Agency Configurations
+    ai_provider: Optional[str] = "openai"
+    ai_model: Optional[str] = "gpt-4o-mini"
     openai_key: Optional[str] = None
+    gemini_api_key: Optional[str] = None
+    heygen_api_key: Optional[str] = None
+    synthesia_api_key: Optional[str] = None
+    runway_api_key: Optional[str] = None
+    google_video_api_key: Optional[str] = None
     default_domain: Optional[str] = None
     branding_logo: Optional[str] = None
     client_self_serve_mode: Optional[bool] = False
     show_agency_configs_to_staff: Optional[bool] = False
     show_agency_configs_to_clients: Optional[bool] = False
     show_reports_to_clients: Optional[bool] = False
+    client_can_generate_ads: Optional[bool] = False
     
     media_vault_file_size_limit_mb: Optional[int] = 5
     media_vault_total_size_limit_mb: Optional[int] = 100
@@ -62,8 +77,8 @@ class UserBase(BaseModel):
 
 # Properties to receive via API on creation
 class UserCreate(UserBase):
-    email: EmailStr
-    password: str
+    email: Optional[EmailStr] = None
+    password: Optional[str] = None
     role: UserRole = UserRole.CLIENT
     manager_id: Optional[UUID] = None
 

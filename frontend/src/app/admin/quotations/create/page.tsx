@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/useAuthStore";
-import { ArrowLeft, Plus, Trash2, Save, LayoutTemplate } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Save, LayoutTemplate, GripVertical } from "lucide-react";
 import Link from "next/link";
 
 interface ClientUser {
@@ -11,6 +11,8 @@ interface ClientUser {
   first_name: string;
   last_name: string;
   email: string;
+  company_name?: string;
+  address?: string;
 }
 
 export default function CreateQuotationPage() {
@@ -40,8 +42,35 @@ export default function CreateQuotationPage() {
   const [items, setItems] = useState([
     { description: "", quantity: 1, unit_price: 0, total: 0 }
   ]);
+  const [historyDescriptions, setHistoryDescriptions] = useState<string[]>([]);
+  const [subjectHistory, setSubjectHistory] = useState<string[]>([]);
 
   const [serviceRoles, setServiceRoles] = useState<any[]>([]);
+
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIndex) return;
+
+    const newItems = [...items];
+    const draggedItem = newItems[draggedIndex];
+    newItems.splice(draggedIndex, 1);
+    newItems.splice(dropIndex, 0, draggedItem);
+    
+    setItems(newItems);
+    setDraggedIndex(null);
+  };
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -80,9 +109,6 @@ export default function CreateQuotationPage() {
           const config = await res.json();
           setFormData(prev => ({
             ...prev,
-            manual_company: prev.manual_company || config.agency_name || "",
-            manual_address: prev.manual_address || config.agency_address || "",
-            manual_email: prev.manual_email || config.agency_email || "",
             company_profile: prev.company_profile || config.agency_profile_text || "",
             logo_url: prev.logo_url || config.branding_logo || "",
           }));
@@ -92,10 +118,27 @@ export default function CreateQuotationPage() {
       }
     };
 
+    const fetchHistory = async () => {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/quotations/items/history`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) setHistoryDescriptions(await res.json());
+
+        const subRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/quotations/subjects/history`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (subRes.ok) setSubjectHistory(await subRes.json());
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
     if (token) {
       fetchClients();
       fetchServiceRoles();
       fetchAgencyConfig();
+      fetchHistory();
     }
   }, [token]);
 
@@ -201,61 +244,68 @@ export default function CreateQuotationPage() {
           <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-6 rounded-2xl space-y-4 shadow-xl">
             <h2 className="text-lg font-semibold text-white mb-4">Client Details</h2>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Select Client <span className="text-red-400">*</span></label>
-              <select 
-                required
-                value={formData.client_id}
-                onChange={(e) => setFormData({...formData, client_id: e.target.value})}
-                className="w-full bg-black/50 border border-white/10 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
-              >
-                <option value="" disabled>Choose a client...</option>
-                {clients.map(c => (
-                  <option key={c.id} value={c.id}>{c.first_name} {c.last_name} ({c.email})</option>
-                ))}
-              </select>
-            </div>
+            {(() => {
+              const selectedClient = clients.find(c => c.id === formData.client_id);
+              return (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Select Client <span className="text-red-400">*</span></label>
+                    <select 
+                      required
+                      value={formData.client_id}
+                      onChange={(e) => setFormData({...formData, client_id: e.target.value})}
+                      className="w-full bg-black/50 border border-white/10 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                    >
+                      <option value="" disabled>Choose a client...</option>
+                      {clients.map(c => (
+                        <option key={c.id} value={c.id}>{`${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Unnamed Client'}</option>
+                      ))}
+                    </select>
+                  </div>
 
-            <div className="pt-2 border-t border-white/10 mt-4">
-              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Optional: Override Display Details</label>
-              <div className="space-y-3">
-                <input 
-                  type="text" 
-                  placeholder="Manual Name (Optional)"
-                  value={formData.manual_name || ""}
-                  onChange={(e) => setFormData({...formData, manual_name: e.target.value})}
-                  className="w-full bg-black/30 border border-white/10 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 text-sm transition-colors"
-                />
-                <input 
-                  type="text" 
-                  placeholder="Manual Company Name (Optional)"
-                  value={formData.manual_company || ""}
-                  onChange={(e) => setFormData({...formData, manual_company: e.target.value})}
-                  className="w-full bg-black/30 border border-white/10 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 text-sm transition-colors"
-                />
-                <input 
-                  type="text" 
-                  placeholder="Manual Company Address (Optional)"
-                  value={formData.manual_address || ""}
-                  onChange={(e) => setFormData({...formData, manual_address: e.target.value})}
-                  className="w-full bg-black/30 border border-white/10 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 text-sm transition-colors"
-                />
-                <input 
-                  type="text" 
-                  placeholder="Manual Email (Optional)"
-                  value={formData.manual_email || ""}
-                  onChange={(e) => setFormData({...formData, manual_email: e.target.value})}
-                  className="w-full bg-black/30 border border-white/10 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 text-sm transition-colors"
-                />
-                <input 
-                  type="text" 
-                  placeholder="Company Logo URL (Optional)"
-                  value={formData.logo_url || ""}
-                  onChange={(e) => setFormData({...formData, logo_url: e.target.value})}
-                  className="w-full bg-black/30 border border-white/10 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 text-sm transition-colors"
-                />
-              </div>
-            </div>
+                  <div className="pt-2 border-t border-white/10 mt-4">
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Optional: Override Display Details</label>
+                    <div className="space-y-3">
+                      <input 
+                        type="text" 
+                        placeholder={selectedClient ? `Override Name (Default: ${selectedClient.first_name || ''} ${selectedClient.last_name || ''}`.trim() + ')' : "Manual Name (Optional)"}
+                        value={formData.manual_name || ""}
+                        onChange={(e) => setFormData({...formData, manual_name: e.target.value})}
+                        className="w-full bg-black/30 border border-white/10 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 text-sm transition-colors"
+                      />
+                      <input 
+                        type="text" 
+                        placeholder={selectedClient?.company_name ? `Override Company (Default: ${selectedClient.company_name})` : "Manual Company Name (Optional)"}
+                        value={formData.manual_company || ""}
+                        onChange={(e) => setFormData({...formData, manual_company: e.target.value})}
+                        className="w-full bg-black/30 border border-white/10 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 text-sm transition-colors"
+                      />
+                      <input 
+                        type="text" 
+                        placeholder={selectedClient?.address ? `Override Address (Default: ${selectedClient.address})` : "Manual Company Address (Optional)"}
+                        value={formData.manual_address || ""}
+                        onChange={(e) => setFormData({...formData, manual_address: e.target.value})}
+                        className="w-full bg-black/30 border border-white/10 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 text-sm transition-colors"
+                      />
+                      <input 
+                        type="text" 
+                        placeholder={selectedClient?.email ? `Override Email (Default: ${selectedClient.email})` : "Manual Email (Optional)"}
+                        value={formData.manual_email || ""}
+                        onChange={(e) => setFormData({...formData, manual_email: e.target.value})}
+                        className="w-full bg-black/30 border border-white/10 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 text-sm transition-colors"
+                      />
+                      <input 
+                        type="text" 
+                        placeholder="Company Logo URL (Optional)"
+                        value={formData.logo_url || ""}
+                        onChange={(e) => setFormData({...formData, logo_url: e.target.value})}
+                        className="w-full bg-black/30 border border-white/10 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 text-sm transition-colors"
+                      />
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Valid Until</label>
@@ -312,8 +362,14 @@ export default function CreateQuotationPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Subject</label>
+              <datalist id="subject-suggestions">
+                {subjectHistory.map((sub, idx) => (
+                  <option key={idx} value={sub} />
+                ))}
+              </datalist>
               <input 
                 type="text"
+                list="subject-suggestions"
                 placeholder="E.g. Quotation for Web Development Services"
                 value={formData.subject}
                 onChange={(e) => setFormData({...formData, subject: e.target.value})}
@@ -400,11 +456,28 @@ export default function CreateQuotationPage() {
               <div className="col-span-2 text-right pr-10">Total</div>
             </div>
 
+            <datalist id="description-suggestions">
+              {historyDescriptions.map((desc, idx) => (
+                <option key={idx} value={desc} />
+              ))}
+            </datalist>
+
             {items.map((item, index) => (
-              <div key={index} className="grid grid-cols-12 gap-4 items-center group bg-black/20 p-2 rounded-xl border border-white/5">
-                <div className="col-span-6">
+              <div 
+                key={index} 
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDrop={(e) => handleDrop(e, index)}
+                className={`grid grid-cols-12 gap-4 items-center group bg-black/20 p-2 rounded-xl border transition-all ${draggedIndex === index ? 'opacity-50 scale-[0.99] border-purple-500 bg-purple-500/10' : 'border-white/5'}`}
+              >
+                <div className="col-span-6 flex items-center gap-1">
+                  <div className="cursor-grab active:cursor-grabbing text-gray-500 hover:text-gray-300 pl-1 py-1">
+                    <GripVertical size={16} />
+                  </div>
                   <input 
                     type="text" required placeholder="Service or product description..."
+                    list="description-suggestions"
                     value={item.description}
                     onChange={(e) => handleItemChange(index, 'description', e.target.value)}
                     className="w-full bg-transparent border-none py-1.5 px-2 text-white focus:outline-none focus:ring-1 focus:ring-purple-500 rounded text-sm"

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useCrossTabSync, useSyncStore } from "@/store/useSyncStore";
 import { Plus, Search, Trash2, Edit2, UserCircle, MessageCircle, Phone, Check, X, UserCheck } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -44,11 +45,14 @@ export default function UsersList() {
   const [lastName, setLastName] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [address, setAddress] = useState("");
   const [canManageUsers, setCanManageUsers] = useState(false);
   
   const [creationMode, setCreationMode] = useState<'FULL' | 'CONTACT_ONLY'>('FULL');
   
   const { token, user: currentUser } = useAuthStore();
+  const syncVersion = useSyncStore(s => s.version);
+  const { broadcastSync } = useCrossTabSync();
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -93,7 +97,7 @@ export default function UsersList() {
       fetchUsers();
       fetchPendingRequests();
     }
-  }, [token, currentUser]);
+  }, [token, currentUser, syncVersion]);
 
   const handleOpenCreate = () => {
     setIsEditMode(false);
@@ -106,6 +110,7 @@ export default function UsersList() {
     setLastName("");
     setCompanyName("");
     setPhoneNumber("");
+    setAddress("");
     setCanManageUsers(false);
     setCreationMode('FULL');
     setIsDialogOpen(true);
@@ -122,7 +127,9 @@ export default function UsersList() {
     setLastName(user.last_name || "");
     setCompanyName(user.company_name || "");
     setPhoneNumber(user.phone_number || "");
+    setAddress(user.address || "");
     setCanManageUsers(user.can_manage_users || false);
+    setCreationMode(!user.email ? 'CONTACT_ONLY' : 'FULL');
     setIsDialogOpen(true);
   };
 
@@ -137,14 +144,8 @@ export default function UsersList() {
         ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/users/${editingUserId}`
         : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/users`;
         
-      let finalEmail = email;
-      let finalPassword = password;
-
-      if (!isEditMode && creationMode === 'CONTACT_ONLY') {
-        const timestamp = Date.now();
-        finalEmail = `contact_${timestamp}@system.local`;
-        finalPassword = Math.random().toString(36).slice(-10);
-      }
+      let finalEmail = email || undefined;
+      let finalPassword = password || undefined;
 
       const payload: any = { 
         email: finalEmail, 
@@ -153,6 +154,7 @@ export default function UsersList() {
         last_name: lastName || undefined,
         company_name: companyName || undefined,
         phone_number: phoneNumber || undefined,
+        address: address || undefined,
         can_manage_users: canManageUsers
       };
       
@@ -170,6 +172,7 @@ export default function UsersList() {
       if (res.ok) {
         setIsDialogOpen(false);
         fetchUsers();
+        broadcastSync();
       } else {
         const data = await res.json();
         alert(data.detail || `Failed to ${isEditMode ? 'update' : 'create'} user`);
@@ -190,6 +193,7 @@ export default function UsersList() {
       });
       if (res.ok) {
         fetchUsers();
+        broadcastSync();
       } else {
         const data = await res.json();
         alert(data.detail || "Failed to delete user");
@@ -211,6 +215,7 @@ export default function UsersList() {
       });
       if (res.ok) {
         fetchUsers();
+        broadcastSync();
       } else {
         const data = await res.json();
         alert(data.detail || "Failed to update manager");
@@ -230,6 +235,7 @@ export default function UsersList() {
       if (res.ok) {
         fetchUsers();
         fetchPendingRequests();
+        broadcastSync();
       } else {
         const err = await res.json();
         alert(err.detail || "Failed to approve request");
@@ -252,6 +258,7 @@ export default function UsersList() {
       });
       if (res.ok) {
         fetchPendingRequests();
+        broadcastSync();
       } else {
         const err = await res.json();
         alert(err.detail || "Failed to reject request");
@@ -300,8 +307,7 @@ export default function UsersList() {
               </DialogHeader>
               <form onSubmit={handleSubmitUser} className="space-y-4 pt-4">
                 
-                {!isEditMode && (
-                  <div className="flex gap-2 mb-4 bg-zinc-100 dark:bg-zinc-900 p-1 rounded-lg">
+                <div className="flex gap-2 mb-4 bg-zinc-100 dark:bg-zinc-900 p-1 rounded-lg">
                     <button 
                       type="button" 
                       onClick={() => setCreationMode('FULL')}
@@ -320,7 +326,6 @@ export default function UsersList() {
                       Contact Only (No Login)
                     </button>
                   </div>
-                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="firstName">First Name</Label>
@@ -357,6 +362,16 @@ export default function UsersList() {
                     />
                   </div>
                 </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="address">Address</Label>
+                  <Input 
+                    id="address" 
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="e.g. 123 Business Rd, City, Country"
+                  />
+                </div>
 
                 {creationMode === 'FULL' && (
                   <>
@@ -367,7 +382,6 @@ export default function UsersList() {
                         type="email" 
                         required 
                         value={email}
-                        disabled={isEditMode}
                         onChange={(e) => setEmail(e.target.value)}
                       />
                     </div>
@@ -382,6 +396,19 @@ export default function UsersList() {
                       />
                     </div>
                   </>
+                )}
+
+                {creationMode === 'CONTACT_ONLY' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email (Optional)</Label>
+                    <Input 
+                      id="email" 
+                      type="email" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Leave blank if unknown"
+                    />
+                  </div>
                 )}
 
                 {creationMode === 'FULL' && (
@@ -560,7 +587,9 @@ export default function UsersList() {
                     <div className="font-medium">{u.first_name || u.last_name ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : 'No Name'}</div>
                   </TableCell>
                   <TableCell>
-                    {u.email.endsWith('@system.local') ? (
+                    {!u.email ? (
+                      <span className="text-sm text-zinc-400 italic">No Email (Guest)</span>
+                    ) : u.email.endsWith('@system.example.com') ? (
                       <span className="text-sm text-zinc-400 italic">No Login Account</span>
                     ) : (
                       <a href={`mailto:${u.email}`} className="text-sm text-indigo-600 hover:underline dark:text-indigo-400">{u.email}</a>

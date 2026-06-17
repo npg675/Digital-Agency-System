@@ -58,11 +58,14 @@ class LandingPage(Base, TimestampMixin):
     # Auto-Responder
     autoresponder_subject = Column(String, nullable=True)
     autoresponder_body = Column(String, nullable=True)
+    ai_system_prompt = Column(String, nullable=True)
     default_sequence_id = Column(Uuid(as_uuid=True), ForeignKey("marketing_sequences.id", ondelete="SET NULL"), nullable=True)
     
     status = Column(Enum(PageStatus), default=PageStatus.DRAFT, nullable=False)
 
     # A/B Testing
+    is_ab_test_active = Column(Boolean, default=False, nullable=False)
+    variant_name = Column(String, nullable=True) # e.g. 'A', 'B'
     is_ab_test_primary = Column(Boolean, default=False, nullable=False)
     ab_test_variant_of_id = Column(Uuid(as_uuid=True), ForeignKey("landing_pages.id", ondelete="SET NULL"), nullable=True)
     ab_test_auto_optimize = Column(Boolean, default=True, nullable=False)

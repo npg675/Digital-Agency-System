@@ -167,18 +167,25 @@ def create_user(user_in: UserCreate, db: Session = Depends(get_db), current_user
         if user_in.role != UserRole.CLIENT:
             raise HTTPException(status_code=403, detail="Staff can only create clients")
 
-    user = db.query(User).filter(User.email == user_in.email).first()
-    if user:
-        raise HTTPException(status_code=400, detail="User already exists")
+    if user_in.role in [UserRole.ADMIN, UserRole.STAFF]:
+        if not user_in.email or not user_in.password:
+            raise HTTPException(status_code=400, detail="Email and password are required for ADMIN and STAFF roles.")
+
+    if user_in.email:
+        user = db.query(User).filter(User.email == user_in.email).first()
+        if user:
+            raise HTTPException(status_code=400, detail="Email already registered")
 
     # Auto-assign manager if staff is creating the client
     manager_id = user_in.manager_id
     if current_user.role == UserRole.STAFF and user_in.role == UserRole.CLIENT:
         manager_id = current_user.id
 
+    hashed_pw = get_password_hash(user_in.password) if user_in.password else None
+
     new_user = User(
-        email=user_in.email,
-        hashed_password=get_password_hash(user_in.password),
+        email=user_in.email if user_in.email else None,
+        hashed_password=hashed_pw,
         role=user_in.role,
         manager_id=manager_id,
         first_name=user_in.first_name,

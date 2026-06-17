@@ -20,3 +20,10 @@ from .invoice import Invoice
 from .quotation import Quotation, QuotationItem, QuotationLog
 from .marketing_asset import MarketingAsset, MarketingSequence, MarketingSequenceStep, MarketingAssetType, StepType, LeadSequence, SequenceStatus
 from .subscription_plan import SubscriptionPlan
+from .inbox_message import InboxMessage
+from .reputation import ReviewRequest
+from .social_integration import SocialIntegration
+from .social_post import SocialPost
+from .course import Course, CourseModule, CourseLesson, CourseEnrollment
+from .automation import Automation
+from .funnel import Funnel, FunnelStep

@@ -2,7 +2,6 @@ from typing import Any
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import Column, DateTime
-import uuid
 from datetime import datetime
 
 class Base(DeclarativeBase):

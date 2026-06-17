@@ -142,9 +142,9 @@ export default function AdminDashboard() {
           fetch(`${API}/analytics/reports`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${API}/leads`, { headers: { Authorization: `Bearer ${token}` } })
         ]);
-        if (!resDash.ok || !resRep.ok) throw new Error("Failed to load dashboard data");
+        if (!resDash.ok) throw new Error("Failed to load dashboard data");
         const jsonDash = await resDash.json();
-        const jsonRep = await resRep.json();
+        const jsonRep = resRep.ok ? await resRep.json() : null;
         const jsonLeads = resLeads.ok ? await resLeads.json() : [];
         
         setData(jsonDash);
@@ -452,17 +452,23 @@ export default function AdminDashboard() {
             <CardDescription>Overall conversion pipeline</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={funnelData} layout="vertical" margin={{ top: 0, right: 20, left: 20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4e4e7" />
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} width={80} />
-                  <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '8px' }} />
-                  <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={30} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            {!reportsData ? (
+              <div className="h-[300px] w-full flex items-center justify-center text-zinc-500 text-sm">
+                Reports access is disabled by the agency.
+              </div>
+            ) : (
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={funnelData} layout="vertical" margin={{ top: 0, right: 20, left: 20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4e4e7" />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} width={80} />
+                    <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '8px' }} />
+                    <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={30} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

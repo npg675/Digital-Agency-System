@@ -5,7 +5,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Trash2, Plus, Loader2, Pencil, Check, X } from "lucide-react";
+import { Trash2, Plus, Loader2, Pencil, Check, X, Info } from "lucide-react";
 import LogoUploader from "@/components/LogoUploader";
 
 export default function SettingsPage() {
@@ -13,13 +13,24 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
+  const [showHint, setShowHint] = useState(false);
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
     company_name: "",
     phone_number: "",
+    address: "",
     password: "",
     openai_key: "",
+    gemini_api_key: "",
+    heygen_api_key: "",
+    synthesia_api_key: "",
+    runway_api_key: "",
+    google_video_api_key: "",
+    ai_provider: "openai",
+    ai_model: "gpt-4o-mini",
+    ai_auto_respond_enabled: false,
+    client_can_generate_ads: false,
     default_domain: "",
     branding_logo: "",
     client_self_serve_mode: false,
@@ -30,6 +41,7 @@ export default function SettingsPage() {
     agency_address: "",
     agency_email: "",
     agency_profile_text: "",
+    brand_voice_profile: "",
     smtp_host: "",
     smtp_port: "",
     smtp_user: "",
@@ -43,10 +55,24 @@ export default function SettingsPage() {
     brand_twitter_url: "",
     brand_instagram_url: "",
     brand_linkedin_url: "",
+    brand_google_review_url: "",
+    brand_stripe_secret_key: "",
+    brand_stripe_publishable_key: "",
     media_vault_file_size_limit_mb: 5,
     media_vault_total_size_limit_mb: 100,
     agency_stripe_secret_key: "",
     agency_stripe_publishable_key: "",
+    agency_footer_text: "",
+    hide_agency_footer_text: false,
+    agency_signature: "",
+    hide_agency_signature: false,
+    hide_agency_signature_text: false,
+    hide_agency_address: false,
+    hide_agency_email: false,
+    agency_contact_no: "",
+    hide_agency_contact_no: false,
+    agency_website: "",
+    hide_agency_website: false,
   });
 
   const [agencyConfig, setAgencyConfig] = useState<any>(null);
@@ -57,6 +83,28 @@ export default function SettingsPage() {
   const [isLoadingRoles, setIsLoadingRoles] = useState(false);
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
   const [editRoleName, setEditRoleName] = useState("");
+  
+  // Integrations State
+  const [integrations, setIntegrations] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Check URL params for active tab and oauth callbacks
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab) setActiveTab(tab);
+    
+    const successMsg = params.get('success');
+    if (successMsg) {
+      alert(`Successfully connected to ${successMsg}!`);
+      // Clean url
+      window.history.replaceState({}, document.title, window.location.pathname + "?tab=integrations");
+    }
+    const errMsg = params.get('error');
+    if (errMsg) {
+      alert(`Integration failed: ${errMsg}`);
+      window.history.replaceState({}, document.title, window.location.pathname + "?tab=integrations");
+    }
+  }, []);
 
   useEffect(() => {
     const fetchAgencyConfig = async () => {
@@ -110,9 +158,25 @@ export default function SettingsPage() {
       }
     };
 
+    const fetchIntegrations = async () => {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/integrations/connected`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          setIntegrations(await res.json());
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
     if (token) {
       fetchAgencyConfig();
       fetchServiceRoles();
+      if (user?.role === 'CLIENT') {
+        fetchIntegrations();
+      }
     }
   }, [token, user]);
 
@@ -124,9 +188,19 @@ export default function SettingsPage() {
         last_name: user.last_name || "",
         company_name: user.company_name || "",
         phone_number: user.phone_number || "",
+        address: user.address || "",
         password: "",
         ...(user.role === 'ADMIN' ? {
           openai_key: user.openai_key || "",
+          heygen_api_key: user.heygen_api_key || "",
+          synthesia_api_key: user.synthesia_api_key || "",
+          runway_api_key: user.runway_api_key || "",
+          google_video_api_key: user.google_video_api_key || "",
+          gemini_api_key: user.gemini_api_key || "",
+          ai_provider: user.ai_provider || "openai",
+          ai_model: user.ai_model || "gpt-4o-mini",
+          ai_auto_respond_enabled: user.ai_auto_respond_enabled || false,
+          client_can_generate_ads: user.client_can_generate_ads || false,
           default_domain: user.default_domain || "",
           branding_logo: user.branding_logo || "",
           agency_name: user.agency_name || "",
@@ -167,6 +241,19 @@ export default function SettingsPage() {
           brand_twitter_url: user.brand_twitter_url || "",
           brand_instagram_url: user.brand_instagram_url || "",
           brand_linkedin_url: user.brand_linkedin_url || "",
+          brand_google_review_url: user.brand_google_review_url || "",
+          brand_stripe_secret_key: user.brand_stripe_secret_key || "",
+          brand_stripe_publishable_key: user.brand_stripe_publishable_key || "",
+          openai_key: user.openai_key || "",
+          heygen_api_key: user.heygen_api_key || "",
+          synthesia_api_key: user.synthesia_api_key || "",
+          runway_api_key: user.runway_api_key || "",
+          google_video_api_key: user.google_video_api_key || "",
+          gemini_api_key: user.gemini_api_key || "",
+          ai_provider: user.ai_provider || "openai",
+          ai_model: user.ai_model || "gpt-4o-mini",
+          ai_auto_respond_enabled: user.ai_auto_respond_enabled || false,
+          client_can_generate_ads: user.client_can_generate_ads || false,
         } : {})
       }));
     }
@@ -237,6 +324,71 @@ export default function SettingsPage() {
     }
   };
 
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [preserveLogin, setPreserveLogin] = useState(true);
+
+  const handleExportBackup = async () => {
+    try {
+      setBackupLoading(true);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/backup/export`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Failed to export backup");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "landingforge_backup.json";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (err) {
+      console.error(err);
+      alert("Error exporting backup.");
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleImportBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!confirm("WARNING: This will permanently erase ALL current data and replace it with the backup file. This action CANNOT be undone! Are you absolutely sure?")) {
+      e.target.value = "";
+      return;
+    }
+
+    try {
+      setRestoreLoading(true);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("preserve_login", preserveLogin.toString());
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/backup/import`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+
+      if (res.ok) {
+        alert("Database restored successfully! The application will now reload.");
+        window.location.reload();
+      } else {
+        const err = await res.json();
+        alert(`Restore failed: ${err.detail || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error importing backup.");
+    } finally {
+      setRestoreLoading(false);
+      e.target.value = "";
+    }
+  };
+
   const handleSave = async () => {
     if (!user) return;
     try {
@@ -247,6 +399,7 @@ export default function SettingsPage() {
         last_name: formData.last_name,
         company_name: formData.company_name,
         phone_number: formData.phone_number,
+        address: formData.address,
       };
 
       if (user.role === 'CLIENT') {
@@ -256,10 +409,31 @@ export default function SettingsPage() {
         payload.brand_twitter_url = formData.brand_twitter_url;
         payload.brand_instagram_url = formData.brand_instagram_url;
         payload.brand_linkedin_url = formData.brand_linkedin_url;
+        payload.brand_google_review_url = formData.brand_google_review_url;
+        payload.brand_stripe_secret_key = formData.brand_stripe_secret_key;
+        payload.brand_stripe_publishable_key = formData.brand_stripe_publishable_key;
+        payload.openai_key = formData.openai_key;
+        payload.heygen_api_key = formData.heygen_api_key;
+        payload.synthesia_api_key = formData.synthesia_api_key;
+        payload.runway_api_key = formData.runway_api_key;
+        payload.google_video_api_key = formData.google_video_api_key;
+        payload.gemini_api_key = formData.gemini_api_key;
+        payload.ai_provider = formData.ai_provider;
+        payload.ai_model = formData.ai_model;
+        payload.ai_auto_respond_enabled = formData.ai_auto_respond_enabled;
       }
 
       if (user.role === 'ADMIN') {
         payload.openai_key = formData.openai_key;
+        payload.heygen_api_key = formData.heygen_api_key;
+        payload.synthesia_api_key = formData.synthesia_api_key;
+        payload.runway_api_key = formData.runway_api_key;
+        payload.google_video_api_key = formData.google_video_api_key;
+        payload.gemini_api_key = formData.gemini_api_key;
+        payload.ai_provider = formData.ai_provider;
+        payload.ai_model = formData.ai_model;
+        payload.ai_auto_respond_enabled = formData.ai_auto_respond_enabled;
+        payload.client_can_generate_ads = formData.client_can_generate_ads;
         payload.default_domain = formData.default_domain;
         payload.branding_logo = formData.branding_logo;
         payload.agency_name = formData.agency_name;
@@ -277,6 +451,7 @@ export default function SettingsPage() {
         payload.hide_agency_signature = formData.hide_agency_signature;
         payload.hide_agency_signature_text = formData.hide_agency_signature_text;
         payload.agency_profile_text = formData.agency_profile_text;
+        payload.brand_voice_profile = formData.brand_voice_profile;
         payload.client_self_serve_mode = formData.client_self_serve_mode;
         payload.show_agency_configs_to_staff = formData.show_agency_configs_to_staff;
         payload.show_agency_configs_to_clients = formData.show_agency_configs_to_clients;
@@ -386,6 +561,18 @@ export default function SettingsPage() {
             Brand Vault
           </button>
         )}
+        {user.role === 'CLIENT' && (
+          <button
+            onClick={() => setActiveTab('integrations')}
+            className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap transition-all ${
+              activeTab === 'integrations'
+                ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-sm'
+                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'
+            }`}
+          >
+            Integrations
+          </button>
+        )}
         {(user.role === 'ADMIN' || agencyConfig?.can_see_agency_configs || (user.role === 'CLIENT' && agencyConfig?.client_self_serve_mode)) && (
           <button
             onClick={() => setActiveTab('agency')}
@@ -422,7 +609,76 @@ export default function SettingsPage() {
             Service Roles
           </button>
         )}
+        {user.role === 'ADMIN' && (
+          <button
+            onClick={() => setActiveTab('backup')}
+            className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap transition-all ${
+              activeTab === 'backup'
+                ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-sm'
+                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'
+            }`}
+          >
+            Data & Backup
+          </button>
+        )}
       </div>
+
+      {activeTab === 'integrations' && user.role === 'CLIENT' && (
+        <div className="space-y-6 animate-in fade-in duration-300 bg-white dark:bg-zinc-900 p-6 rounded-xl border">
+          <div>
+            <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 mb-2">
+              Social Media Integrations
+            </h2>
+            <p className="text-sm text-zinc-500 mb-6">
+              Connect your social media accounts to automatically publish scheduled posts. 
+              (Ensure your agency has added Developer API Keys before connecting).
+            </p>
+          </div>
+          
+          <div className="grid gap-4">
+            {['FACEBOOK', 'INSTAGRAM', 'TWITTER', 'LINKEDIN', 'TIKTOK'].map(platform => {
+              const connected = integrations.find(i => i.platform === platform);
+              return (
+                <div key={platform} className="flex items-center justify-between p-4 border border-zinc-200 dark:border-zinc-800 rounded-lg">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center font-bold text-lg">
+                      {platform[0]}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-zinc-900 dark:text-zinc-100">{platform}</h3>
+                      <p className="text-xs text-zinc-500">
+                        {connected ? `Connected on ${new Date(connected.created_at).toLocaleDateString()}` : "Not connected"}
+                      </p>
+                    </div>
+                  </div>
+                  {connected ? (
+                    <Button variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200" onClick={async () => {
+                      if (!confirm(`Disconnect ${platform}?`)) return;
+                      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/integrations/${platform}`, {
+                        method: "DELETE",
+                        headers: { Authorization: `Bearer ${token}` }
+                      });
+                      window.location.reload();
+                    }}>
+                      Disconnect
+                    </Button>
+                  ) : (
+                    <Button onClick={() => {
+                      fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/integrations/${platform}/connect`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                      }).then(r => r.json()).then(data => {
+                        if (data.url) window.open(data.url, '_blank');
+                      });
+                    }}>
+                      Connect
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <fieldset disabled={!isEditing}>
         {activeTab === 'profile' && (
@@ -552,6 +808,93 @@ export default function SettingsPage() {
                 <Label htmlFor="brand_linkedin_url" className="text-zinc-500">LinkedIn URL</Label>
                 <Input id="brand_linkedin_url" name="brand_linkedin_url" value={formData.brand_linkedin_url} onChange={handleChange} placeholder="https://linkedin.com/..." />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="brand_google_review_url" className="text-zinc-500">Google Review URL</Label>
+                <Input id="brand_google_review_url" name="brand_google_review_url" value={formData.brand_google_review_url} onChange={handleChange} placeholder="https://g.page/r/your-id/review" />
+                <p className="text-xs text-zinc-400 mt-1">Used by the Reputation Manager to send automated review requests.</p>
+              </div>
+
+              <div className="pt-6 mt-6 border-t border-zinc-200 dark:border-zinc-800 space-y-4">
+                <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Funnels & Payments</h3>
+                <p className="text-sm text-zinc-500 mb-4">Set up Stripe to accept payments on your Sales Funnels.</p>
+                <div className="space-y-2">
+                  <Label htmlFor="agency_stripe_publishable_key" className="text-zinc-500">Stripe Publishable Key</Label>
+                  <Input id="agency_stripe_publishable_key" name="agency_stripe_publishable_key" value={formData.agency_stripe_publishable_key} onChange={handleChange} placeholder="pk_test_..." />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="agency_stripe_secret_key" className="text-zinc-500">Stripe Secret Key</Label>
+                  <Input type="password" id="agency_stripe_secret_key" name="agency_stripe_secret_key" value={formData.agency_stripe_secret_key} onChange={handleChange} placeholder="sk_test_..." />
+                </div>
+              </div>
+
+              <div className="pt-6 mt-6 border-t border-zinc-200 dark:border-zinc-800 space-y-4">
+                <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Auto-Responders</h3>
+                <p className="text-sm text-zinc-500 mb-4">Connect OpenAI to automatically reply to leads in the Unified Inbox.</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    <Label className="text-zinc-500">AI Provider</Label>
+                    <select
+                      name="ai_provider"
+                      value={formData.ai_provider || "openai"}
+                      onChange={handleChange}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="openai">OpenAI (ChatGPT)</option>
+                      <option value="gemini">Google Gemini</option>
+                    </select>
+                  </div>
+                  <div className="space-y-4">
+                    <Label className="text-zinc-500">AI Model</Label>
+                    <select
+                      name="ai_model"
+                      value={formData.ai_model || "gpt-4o-mini"}
+                      onChange={handleChange}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {formData.ai_provider === 'gemini' ? (
+                        <>
+                          <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                          <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                          <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="gpt-4o-mini">GPT-4o Mini</option>
+                          <option value="gpt-4o">GPT-4o</option>
+                          <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+                </div>
+                
+                {formData.ai_provider !== "gemini" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="openai_key" className="text-zinc-500">OpenAI API Key</Label>
+                    <Input type="password" id="openai_key" name="openai_key" value={formData.openai_key} onChange={handleChange} placeholder="sk-..." />
+                  </div>
+                )}
+
+                {formData.ai_provider === "gemini" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="gemini_api_key" className="text-zinc-500">Google Gemini API Key</Label>
+                    <Input type="password" id="gemini_api_key" name="gemini_api_key" value={formData.gemini_api_key} onChange={handleChange} placeholder="AIza..." />
+                  </div>
+                )}
+                <div className="flex items-center space-x-2 pt-2">
+                  <input 
+                    type="checkbox" 
+                    id="client_ai_auto_respond_enabled"
+                    name="ai_auto_respond_enabled"
+                    className="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                    checked={formData.ai_auto_respond_enabled}
+                    onChange={handleChange}
+                  />
+                  <Label htmlFor="client_ai_auto_respond_enabled" className="font-medium text-zinc-900 dark:text-zinc-100">
+                    Enable AI Auto-Respond (Replies automatically to incoming SMS and Emails using Context)
+                  </Label>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -571,15 +914,155 @@ export default function SettingsPage() {
 
             <div className="space-y-4">
               {user.role === 'ADMIN' && (
-                <div className="space-y-2">
-                  <Label htmlFor="openai_key" className="text-zinc-500">OpenAI API Key (For AI generation)</Label>
-                  <Input 
-                    id="openai_key" 
-                    name="openai_key"
-                    value={formData.openai_key}
-                    onChange={handleChange}
-                    placeholder="sk-proj-..." 
-                  />
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-4">
+                      <Label className="text-zinc-500">AI Provider</Label>
+                      <select
+                        name="ai_provider"
+                        value={formData.ai_provider || "openai"}
+                        onChange={handleChange}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="openai">OpenAI (ChatGPT)</option>
+                        <option value="gemini">Google Gemini</option>
+                      </select>
+                    </div>
+                    <div className="space-y-4">
+                      <Label className="text-zinc-500">AI Model</Label>
+                      <select
+                        name="ai_model"
+                        value={formData.ai_model || "gpt-4o-mini"}
+                        onChange={handleChange}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {formData.ai_provider === 'gemini' ? (
+                          <>
+                            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="gpt-4o-mini">GPT-4o Mini</option>
+                            <option value="gpt-4o">GPT-4o</option>
+                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+                  </div>
+                  
+                  {formData.ai_provider !== "gemini" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="openai_key" className="text-zinc-500">OpenAI API Key (For AI generation)</Label>
+                      <Input 
+                        id="openai_key" 
+                        name="openai_key"
+                        value={formData.openai_key}
+                        onChange={handleChange}
+                        placeholder="sk-proj-..." 
+                      />
+                    </div>
+                  )}
+
+                  {formData.ai_provider === "gemini" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="gemini_api_key" className="text-zinc-500">Google Gemini API Key</Label>
+                      <Input 
+                        id="gemini_api_key" 
+                        name="gemini_api_key"
+                        value={formData.gemini_api_key}
+                        onChange={handleChange}
+                        placeholder="AIza..." 
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                    <h3 className="font-bold text-zinc-900 dark:text-zinc-100">Video Generation AI Integrations</h3>
+                    <p className="text-sm text-zinc-500">Configure these to enable generating MP4 videos directly from scripts in the Marketing Hub later.</p>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="heygen_api_key" className="text-zinc-500">HeyGen API Key</Label>
+                      <Input 
+                        id="heygen_api_key" 
+                        name="heygen_api_key"
+                        type="password"
+                        value={formData.heygen_api_key}
+                        onChange={handleChange}
+                        placeholder="HeyGen API token..." 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="synthesia_api_key" className="text-zinc-500">Synthesia API Key</Label>
+                      <Input 
+                        id="synthesia_api_key" 
+                        name="synthesia_api_key"
+                        type="password"
+                        value={formData.synthesia_api_key}
+                        onChange={handleChange}
+                        placeholder="Synthesia API token..." 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="runway_api_key" className="text-zinc-500">Runway API Key</Label>
+                      <Input 
+                        id="runway_api_key" 
+                        name="runway_api_key"
+                        type="password"
+                        value={formData.runway_api_key}
+                        onChange={handleChange}
+                        placeholder="Runway API token..." 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="google_video_api_key" className="text-zinc-500">Google AI Studio / Veo 2.0 API Key</Label>
+                      <p className="text-xs text-zinc-400">Get your key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-indigo-500 underline hover:text-indigo-700">aistudio.google.com</a>. Your Gemini Pro subscription enables Veo 2.0 access.</p>
+                      <Input 
+                        id="google_video_api_key" 
+                        name="google_video_api_key"
+                        type="password"
+                        value={formData.google_video_api_key}
+                        onChange={handleChange}
+                        placeholder="AIza... (Google AI Studio API Key)" 
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 mt-4">
+                    <div>
+                      <Label htmlFor="ai_auto_respond_enabled" className="text-zinc-900 dark:text-zinc-100 font-bold">Enable AI Auto-Responder Globally</Label>
+                      <p className="text-xs text-zinc-500 mt-1">If enabled, the AI will automatically reply to incoming leads immediately using your selected Provider.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        name="ai_auto_respond_enabled"
+                        checked={formData.ai_auto_respond_enabled}
+                        onChange={handleChange}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
+                  
+                  <div className="flex justify-between items-center bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-lg border border-zinc-200 dark:border-zinc-800">
+                    <div>
+                      <Label htmlFor="client_can_generate_ads" className="text-zinc-900 dark:text-zinc-100 font-bold">Allow Clients to Generate Ads</Label>
+                      <p className="text-xs text-zinc-500 mt-1">If enabled, clients will see a 'Generate with AI' button in their Marketing Hub to dynamically create ad copy.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        name="client_can_generate_ads"
+                        checked={formData.client_can_generate_ads}
+                        onChange={handleChange}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-zinc-600 peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
                 </div>
               )}
 
@@ -831,6 +1314,21 @@ export default function SettingsPage() {
                     />
                   </div>
 
+                  <div className="space-y-2">
+                    <Label htmlFor="brand_voice_profile" className="text-zinc-500">Agency Brand Voice Profile</Label>
+                    <textarea 
+                      id="brand_voice_profile" 
+                      name="brand_voice_profile"
+                      value={formData.brand_voice_profile}
+                      onChange={(e) => setFormData({...formData, brand_voice_profile: e.target.value})}
+                      placeholder="e.g. Professional but witty, use simple language, focus on value..." 
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-500 disabled:opacity-50"
+                      rows={4}
+                      disabled={user.role !== 'ADMIN'}
+                    />
+                    <p className="text-xs text-zinc-500">This profile will be injected into all AI generators (video scripts, emails, blogs) to maintain a consistent tone.</p>
+                  </div>
+
                   {user.role === 'ADMIN' && (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -923,8 +1421,27 @@ export default function SettingsPage() {
         {activeTab === 'automation' && (user.role === 'ADMIN' || (user.role === 'CLIENT' && agencyConfig?.client_self_serve_mode)) && (
           <div className="space-y-8 animate-in fade-in duration-300 bg-white dark:bg-zinc-900 p-6 rounded-xl border">
             <div>
-              <h3 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 mb-2">Email Automation (SMTP)</h3>
-              <p className="text-sm text-zinc-500">Configure SMTP to send automated lead alerts to your clients.</p>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Email Automation (SMTP)</h3>
+                <Button variant="outline" size="sm" type="button" onClick={() => setShowHint(!showHint)} className="flex items-center gap-2">
+                  <Info size={14} /> {showHint ? "Hide Hint" : "Show Hint"}
+                </Button>
+              </div>
+              <p className="text-sm text-zinc-500 mb-4">Configure SMTP to send automated lead alerts and quotations to your clients.</p>
+              
+              {showHint && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg mb-6 animate-in slide-in-from-top-2">
+                  <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2">
+                    <Info size={16} /> Quick Setup Hint (Gmail)
+                  </h4>
+                  <p className="text-sm text-blue-700 dark:text-blue-400 mb-2">
+                    If using Gmail: set Host to <strong>smtp.gmail.com</strong> and Port to <strong>587</strong> or <strong>465</strong>. 
+                  </p>
+                  <p className="text-sm text-blue-700 dark:text-blue-400">
+                    <strong>Important:</strong> You cannot use your normal Google password. You must turn on 2-Step Verification in your Google Account and generate an <strong>App Password</strong>, then paste that 16-character password below.
+                  </p>
+                </div>
+              )}
             </div>
             
             <div className="grid grid-cols-2 gap-4">
@@ -1062,6 +1579,66 @@ export default function SettingsPage() {
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'backup' && user.role === 'ADMIN' && (
+        <div className="space-y-6 animate-in fade-in duration-300 bg-white dark:bg-zinc-900 p-6 rounded-xl border">
+          <div>
+            <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 mb-2">
+              Data & Backup
+            </h2>
+            <p className="text-sm text-zinc-500 mb-6">
+              Export all system data to a secure JSON file, or restore a previous backup.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="border rounded-lg p-6 flex flex-col items-start bg-zinc-50 dark:bg-zinc-800/20">
+              <h3 className="text-lg font-semibold mb-2">Export Data</h3>
+              <p className="text-sm text-zinc-500 mb-4 flex-1">
+                Download a complete JSON snapshot of all your database records (Users, Pages, Quotations, Settings, etc.).
+              </p>
+              <Button onClick={handleExportBackup} disabled={backupLoading} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
+                {backupLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Download Backup
+              </Button>
+            </div>
+
+            <div className="border border-red-200 dark:border-red-900/30 rounded-lg p-6 flex flex-col items-start bg-red-50/50 dark:bg-red-900/10">
+              <h3 className="text-lg font-semibold mb-2 text-red-600 dark:text-red-400">Restore Data</h3>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-2 flex-1">
+                Upload a previously exported JSON backup. <strong className="text-red-500">WARNING:</strong> This completely erases and replaces current data!
+              </p>
+
+              <div className="flex items-center gap-2 mb-4">
+                <input 
+                  type="checkbox" 
+                  id="preserve_login"
+                  checked={preserveLogin} 
+                  onChange={(e) => setPreserveLogin(e.target.checked)} 
+                  className="rounded border-zinc-300 text-red-600 focus:ring-red-600"
+                />
+                <Label htmlFor="preserve_login" className="text-sm text-zinc-600 dark:text-zinc-400 font-normal cursor-pointer">
+                  Preserve my current Admin email and password
+                </Label>
+              </div>
+
+              <div className="relative w-full sm:w-auto">
+                <Input 
+                  type="file" 
+                  accept=".json" 
+                  onChange={handleImportBackup} 
+                  disabled={restoreLoading}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                <Button variant="destructive" disabled={restoreLoading} className="w-full">
+                  {restoreLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                  Upload & Restore
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}

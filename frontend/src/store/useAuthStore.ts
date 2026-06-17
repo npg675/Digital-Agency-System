@@ -10,6 +10,15 @@ interface User {
   company_name?: string | null;
   phone_number?: string | null;
   can_manage_users?: boolean;
+  ai_provider?: string;
+  ai_model?: string;
+  openai_key?: string | null;
+  gemini_api_key?: string | null;
+  heygen_api_key?: string | null;
+  synthesia_api_key?: string | null;
+  runway_api_key?: string | null;
+  google_video_api_key?: string | null;
+  client_can_generate_ads?: boolean;
 }
 
 interface AuthState {

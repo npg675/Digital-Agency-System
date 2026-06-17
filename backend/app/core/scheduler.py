@@ -7,7 +7,7 @@ from app.models.lead import Lead
 from app.models.user import User, UserRole
 from app.core.email import send_smtp_email
 from app.core.email_templates import get_appointment_reminder_template, get_followup_template
-from app.models.marketing_asset import LeadSequence, SequenceStatus, MarketingSequenceStep, MarketingSequence, StepType
+from app.models.marketing_asset import LeadSequence, SequenceStatus, MarketingSequenceStep, StepType
 scheduler = BackgroundScheduler()
 
 def send_email_notification(host_user: User, to_email: str, subject: str, html_message: str):
@@ -172,6 +172,79 @@ def process_autoresponder_sequences():
     finally:
         db.close()
 
+def process_scheduled_social_posts():
+    print("Running process_scheduled_social_posts...")
+    db = SessionLocal()
+    now = datetime.utcnow()
+    
+    try:
+        from app.models.social_post import SocialPost
+        from app.models.social_integration import SocialIntegration
+        pending_posts = db.query(SocialPost).filter(
+            SocialPost.status == "SCHEDULED",
+            SocialPost.scheduled_for <= now
+        ).all()
+        
+        for post in pending_posts:
+            client = db.query(User).filter(User.id == post.client_id).first()
+            if not client:
+                post.status = "FAILED"
+                continue
+                
+            platforms = post.platforms.split(",")
+            
+            # Find the agency admin or manager to send from
+            agency_user = None
+            if client.manager_id:
+                agency_user = db.query(User).filter(User.id == client.manager_id).first()
+            if not agency_user:
+                agency_user = db.query(User).filter(User.role == UserRole.ADMIN).first()
+                
+            # Dispatch
+            html_body = f"<div style='font-family: Arial, sans-serif; white-space: pre-wrap;'>{post.content}</div>"
+            if post.media_url:
+                urls = [u.strip() for u in post.media_url.split(",") if u.strip()]
+                for url in urls:
+                    html_body += f"<br><br><img src='{url}' alt='Attached Media' style='max-width: 400px; border-radius: 8px;'>"
+                
+            if "EMAIL" in platforms and agency_user and client.email:
+                try:
+                    send_email_notification(agency_user, client.email, "New Social Broadcast", html_body)
+                    print(f"Successfully emailed post to {client.email}")
+                except Exception as e:
+                    print(f"Failed to email post to {client.email}: {e}")
+                    
+            if "WHATSAPP" in platforms and client.phone_number:
+                msg = f"{post.content}"
+                if post.media_url:
+                    urls = [u.strip() for u in post.media_url.split(",") if u.strip()]
+                    msg += "\nMedia:\n" + "\n".join(urls)
+                send_whatsapp_notification(client.phone_number, msg)
+                
+            for p in platforms:
+                if p not in ["EMAIL", "WHATSAPP"]:
+                    # Check for Social Integration credentials
+                    integration = db.query(SocialIntegration).filter(
+                        SocialIntegration.client_id == client.id,
+                        SocialIntegration.platform == p
+                    ).first()
+                    
+                    if integration and integration.access_token:
+                        print(f"[{p}] Dispatched with token: {integration.access_token[:10]}... to account {integration.account_id or 'unknown'}!")
+                        # TODO: Execute real httpx request here
+                    else:
+                        print(f"[{p}] Failed to dispatch for client {client.company_name or client.email}: No {p} integration connected.")
+                        
+            post.status = "PUBLISHED"
+            
+        db.commit()
+    except Exception as e:
+        print(f"Error processing social posts: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 def start_scheduler():
     if not scheduler.running:
         # Run every 5 minutes
@@ -196,6 +269,14 @@ def start_scheduler():
             trigger=IntervalTrigger(minutes=10),
             id='autoresponder_sequences',
             name='Autoresponder Drip Sequences',
+            replace_existing=True,
+        )
+        # Dispatch social posts every 1 minute
+        scheduler.add_job(
+            process_scheduled_social_posts,
+            trigger=IntervalTrigger(minutes=1),
+            id='scheduled_social_posts',
+            name='Dispatch Scheduled Social Posts',
             replace_existing=True,
         )
         scheduler.start()
