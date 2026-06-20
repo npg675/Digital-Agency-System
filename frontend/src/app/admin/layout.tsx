@@ -5,7 +5,7 @@ import { useCrossTabSync } from "@/store/useSyncStore";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { LayoutDashboard, FileText, Settings, LogOut, Copy, Users, BarChart2, Menu, X, Bell, Activity, CheckCircle2, Clock, ListTree, Calendar, CreditCard, Megaphone, MessageSquare, Share2, Star, Route, Zap, GraduationCap, Pin, PinOff, Video, Film, Lightbulb, Target, Search } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, LogOut, Copy, Users, BarChart2, Menu, X, Bell, Activity, CheckCircle2, Clock, ListTree, Calendar, CreditCard, Megaphone, MessageSquare, Share2, Star, Route, Zap, GraduationCap, Pin, PinOff, Video, Film, Lightbulb, Target, Search, Edit2 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PlaybookBackButton } from "@/components/PlaybookBackButton";
 
@@ -20,10 +20,43 @@ export default function AdminLayout({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarPinned, setIsSidebarPinned] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [resumeSession, setResumeSession] = useState<{ id: string; name: string; url: string } | null>(null);
   const router = useRouter();
   const pathname = usePathname();
 
   const isLoginPage = pathname === "/admin/login";
+  const isOnDashboardOrPages = pathname === "/admin" || pathname === "/admin/pages";
+
+  // Check for a saved editor session to resume
+  useEffect(() => {
+    if (!isOnDashboardOrPages) return;
+    try {
+      const raw = localStorage.getItem('lastEditorSession');
+      if (raw) {
+        const session = JSON.parse(raw);
+        // Only show if session is less than 7 days old
+        const savedAt = new Date(session.savedAt);
+        const ageHours = (Date.now() - savedAt.getTime()) / (1000 * 60 * 60);
+        if (session.id && session.url && ageHours < 168) {
+          setResumeSession(session);
+        } else {
+          localStorage.removeItem('lastEditorSession');
+        }
+      }
+    } catch (_) {}
+  }, [isOnDashboardOrPages, pathname]);
+
+  const handleResumeSession = () => {
+    if (resumeSession) {
+      router.push(resumeSession.url);
+      setResumeSession(null);
+    }
+  };
+
+  const handleDismissSession = () => {
+    try { localStorage.removeItem('lastEditorSession'); } catch (_) {}
+    setResumeSession(null);
+  };
 
   useEffect(() => {
     if (!token && !isLoginPage) {
@@ -380,6 +413,34 @@ export default function AdminLayout({
       {/* Main Content */}
       <main className={`flex-1 overflow-y-auto mt-16 md:mt-0 relative w-full transition-all duration-200 ease-in-out ${isSidebarPinned ? "md:pl-64" : "md:pl-14"}`}>
         <PlaybookBackButton />
+
+        {/* ── Resume Last Session Banner ── */}
+        {resumeSession && isOnDashboardOrPages && (
+          <div className="mx-4 mt-4 mb-0 flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 animate-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center gap-3 min-w-0">
+              <Edit2 className="w-4 h-4 flex-shrink-0" />
+              <span className="text-sm font-medium truncate">
+                Resume editing: <span className="font-bold">{resumeSession.name}</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={handleResumeSession}
+                className="px-3 py-1.5 rounded-lg bg-white text-indigo-700 text-xs font-bold hover:bg-indigo-50 transition-colors"
+              >
+                Resume Editing
+              </button>
+              <button
+                onClick={handleDismissSession}
+                className="p-1.5 rounded-lg hover:bg-indigo-500 transition-colors"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {children}
       </main>
     </div>

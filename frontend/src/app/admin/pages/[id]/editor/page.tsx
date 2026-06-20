@@ -6,10 +6,12 @@ import { useEditorStore } from "@/store/useEditorStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, Globe, EyeOff, CheckCircle2, Loader2, Settings, CopyPlus, Menu, Split } from "lucide-react";
+import { ArrowLeft, Save, Globe, EyeOff, CheckCircle2, Loader2, Settings, CopyPlus, Menu, Split, Images } from "lucide-react";
 import Link from "next/link";
 import { PageSettingsModal } from "@/components/editor/PageSettingsModal";
 import { ABTestingModal } from "@/components/editor/ABTestingModal";
+import { MediaLibraryDrawer } from "@/components/editor/MediaLibraryDrawer";
+import { AssetShelf } from "@/components/editor/AssetShelf";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
@@ -21,6 +23,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     setPageId, setPageMeta, setSections,
     pageName, pageSlug, pageStatus, sections,
     isSaving, setIsSaving, setPageStatus,
+    activeSectionId, updateSection,
   } = useEditorStore();
 
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -29,6 +32,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const [isABTestingOpen, setIsABTestingOpen] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isMediaLibraryOpen, setIsMediaLibraryOpen] = useState(false);
 
   // Fetch page data on mount
   useEffect(() => {
@@ -55,6 +59,18 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           default_sequence_id: data.default_sequence_id,
         });
         setSections(data.sections || []);
+
+        // ── Persist last editor session so we can restore it after hard refresh ──
+        try {
+          localStorage.setItem('lastEditorSession', JSON.stringify({
+            id: data.id,
+            name: data.name,
+            slug: data.slug,
+            url: `/admin/pages/${data.id}/editor`,
+            savedAt: new Date().toISOString(),
+          }));
+        } catch (_) {}
+
       } catch (e) {
         console.error(e);
       } finally {
@@ -242,7 +258,35 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           >
             <Split className="w-3.5 h-3.5" /> A/B Testing
           </button>
+
+          {/* Media Library toggle */}
+          <button
+            onClick={() => setIsMediaLibraryOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-teal-500/50 text-teal-400 hover:bg-teal-500/10 transition-colors"
+          >
+            <Images className="w-3.5 h-3.5" /> Media Library
+          </button>
           
+          {/* Gallery Background Toggle — shows only when a Gallery section is active */}
+          {(() => {
+            const activeSection = sections.find(s => s.id === activeSectionId);
+            if (!activeSection || activeSection.type !== "Gallery") return null;
+            const isDark = activeSection.config?.darkBackground;
+            return (
+              <button
+                onClick={() => updateSection(activeSection.id, { ...activeSection.config, darkBackground: !isDark })}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                  isDark
+                    ? "border-amber-500/50 text-amber-400 hover:bg-amber-500/10"
+                    : "border-zinc-600 text-zinc-300 hover:bg-zinc-800"
+                }`}
+                title="Toggle Gallery background between Light and Dark"
+              >
+                {isDark ? "☀️ Light BG" : "🌙 Dark BG"}
+              </button>
+            );
+          })()}
+
           {/* Settings Modal Toggle */}
           <button
             onClick={() => setIsSettingsOpen(true)}
@@ -282,8 +326,12 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         <EditorPreview />
       </div>
 
+      {/* Asset Shelf — fixed at bottom, always reachable during drag */}
+      <AssetShelf />
+
       <PageSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       <ABTestingModal isOpen={isABTestingOpen} onClose={() => setIsABTestingOpen(false)} pageId={id} />
+      <MediaLibraryDrawer isOpen={isMediaLibraryOpen} onClose={() => setIsMediaLibraryOpen(false)} />
     </div>
   );
 }

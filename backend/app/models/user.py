@@ -108,4 +108,11 @@ class User(Base, TimestampMixin):
     agency_stripe_secret_key = Column(String, nullable=True)
     agency_stripe_publishable_key = Column(String, nullable=True)
 
+    # Video Editor Upload Settings
+    video_storage_provider = Column(String, default="local", nullable=False)  # 'local', 'gdrive', 'dual'
+    video_upload_local_path = Column(String, default="public/uploads", nullable=True)
+    video_export_path = Column(String, default="uploads/videos", nullable=True)  # where rendered videos are saved
+    google_drive_folder_id = Column(String, nullable=True)
+    google_drive_credentials = Column(String, nullable=True)  # JSON string of service account
+
     manager = relationship("User", remote_side=[id], backref="clients")

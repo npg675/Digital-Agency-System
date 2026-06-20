@@ -11,7 +11,7 @@ type SocialPost = {
   content: string;
   status: string;
   scheduled_at: string | null;
-  platform: string;
+  platform?: string | null;
   video_url: string | null;
 };
 
@@ -47,7 +47,8 @@ export default function ContentCalendarPage() {
     fetchPosts();
   }, [token]);
 
-  const getPlatformColor = (platform: string) => {
+  const getPlatformColor = (platform?: string | null) => {
+    if (!platform) return "bg-zinc-100 text-zinc-700 border-zinc-200";
     const p = platform.toLowerCase();
     if (p.includes("linkedin")) return "bg-blue-100 text-blue-700 border-blue-200";
     if (p.includes("twitter") || p.includes("x")) return "bg-zinc-100 text-zinc-700 border-zinc-200";
@@ -117,7 +118,7 @@ export default function ContentCalendarPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase border ${getPlatformColor(post.platform)}`}>
-                          {post.platform}
+                          {post.platform || "Unknown"}
                         </span>
                         {post.status === "PUBLISHED" ? (
                           <span className="flex items-center gap-1 text-xs font-medium text-green-600"><CheckCircle2 className="w-3.5 h-3.5" /> Published</span>

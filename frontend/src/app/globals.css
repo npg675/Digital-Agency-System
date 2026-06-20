@@ -1,8 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Outfit:wght@400;800&family=Russo+One&family=Poppins:wght@400;700&family=Mukta:wght@400;700&family=Yatra+One&family=Khand:wght@400;700&family=Teko:wght@400;700&family=Kalam:wght@400;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+
+@font-face {
+  font-family: 'Preeti';
+  src: url('/fonts/Preeti.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Kruti Dev 010';
+  src: url('/fonts/KrutiDev.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
 
 @theme inline {
   --color-background: var(--background);

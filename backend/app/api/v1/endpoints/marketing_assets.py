@@ -483,13 +483,19 @@ def start_video_generation(
                         video_bytes = None
                         
                     if video_bytes:
-                        os.makedirs("uploads/videos", exist_ok=True)
+                        veo_export_dir = (getattr(user, "video_export_path", None) or "uploads/videos").replace("\\", "/").strip("/")
+                        os.makedirs(veo_export_dir, exist_ok=True)
                         filename = f"{uuid.uuid4()}.mp4"
-                        filepath = os.path.join("uploads/videos", filename)
+                        filepath = os.path.join(veo_export_dir, filename)
                         with open(filepath, "wb") as f:
                             f.write(video_bytes)
-                        
-                        public_url = f"{os.getenv('NEXT_PUBLIC_API_URL', 'http://localhost:8000/api/v1').replace('/api/v1', '')}/uploads/videos/{filename}"
+
+                        base_server = os.getenv('NEXT_PUBLIC_API_URL', 'http://localhost:8000/api/v1').replace('/api/v1', '')
+                        if veo_export_dir.startswith("public/"):
+                            relative = veo_export_dir.replace("public/", "", 1)
+                            public_url = f"/{relative}/{filename}"
+                        else:
+                            public_url = f"{base_server}/{veo_export_dir}/{filename}"
                     else:
                         public_url = generated_video.video.uri
                     
@@ -574,23 +580,32 @@ async def export_video_asset(
     """
     Handle exported video from the Video Editor.
     destination: 'library' or 'gcp'
+    Uses the video_export_path configured by the admin in Storage Settings.
     """
-    # 1. Save locally to /uploads/videos
-    os.makedirs("uploads/videos", exist_ok=True)
+    # 1. Resolve the export path from DB settings (fallback to default)
+    export_dir = (current_user.video_export_path or "uploads/videos").replace("\\", "/").strip("/")
+    os.makedirs(export_dir, exist_ok=True)
+
     filename = f"{uuid.uuid4()}_{file.filename}"
-    local_path = os.path.join("uploads/videos", filename)
-    
+    local_path = os.path.join(export_dir, filename)
+
     with open(local_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-        
-    public_url = f"{os.getenv('NEXT_PUBLIC_API_URL', 'http://localhost:8000/api/v1').replace('/api/v1', '')}/uploads/videos/{filename}"
+
+    # Build public URL: if path starts with "public/" (Next.js), strip it for URL
+    base_server = os.getenv('NEXT_PUBLIC_API_URL', 'http://localhost:8000/api/v1').replace('/api/v1', '')
+    if export_dir.startswith("public/"):
+        # Next.js static — served without the "public/" prefix
+        relative = export_dir.replace("public/", "", 1)
+        public_url = f"/{relative}/{filename}"
+    else:
+        # FastAPI static mount at /uploads
+        public_url = f"{base_server}/{export_dir}/{filename}"
 
     # 2. If GCP, upload to Google Cloud Storage
     if destination == "gcp":
         try:
             from google.cloud import storage
-            # Assumes GOOGLE_APPLICATION_CREDENTIALS is set or running on GCP
-            # or we could use the user's API key if we had a GCS key, but standard is ADC.
             client = storage.Client()
             bucket_name = os.getenv("GCP_BUCKET_NAME", "agency-video-exports")
             bucket = client.bucket(bucket_name)
@@ -599,7 +614,6 @@ async def export_video_asset(
             blob.make_public()
             public_url = blob.public_url
         except Exception as e:
-            # Fallback to local URL if GCP fails (e.g. missing credentials)
             print("GCP Upload failed, falling back to local storage:", e)
 
     # 3. Save as a new Asset in the library
@@ -611,9 +625,10 @@ async def export_video_asset(
         video_url=public_url,
         video_status="COMPLETED"
     )
-    
+
     db.add(new_asset)
     db.commit()
     db.refresh(new_asset)
-    
+
     return new_asset
+

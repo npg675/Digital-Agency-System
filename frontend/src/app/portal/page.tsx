@@ -14,6 +14,7 @@ export default function PortalDashboardPage() {
 
   useEffect(() => {
     const fetchDashboard = async () => {
+      try {
         const [dashRes, videosRes] = await Promise.all([
           fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/portal/dashboard`, {
             headers: { Authorization: `Bearer ${token}` }

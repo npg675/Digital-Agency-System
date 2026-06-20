@@ -2,9 +2,10 @@
 
 import { useEditorStore } from "@/store/useEditorStore";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Copy, Trash2, ChevronUp, ChevronDown, MousePointer2, Upload, Loader2 } from "lucide-react";
+import { Copy, Trash2, ChevronUp, ChevronDown, ChevronsUp, ChevronsDown, MousePointer2, Upload, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { resolveImageUrl } from "@/lib/utils";
+import { MEDIA_DRAG_KEY } from "@/components/editor/MediaLibraryDrawer";
 
 // ─── Section renderers ───────────────────────────────────────────────────
 
@@ -138,23 +139,160 @@ function AboutRenderer({ config }: { config: any }) {
   );
 }
 
-function GalleryRenderer({ config }: { config: any }) {
+function GalleryRenderer({ config, onUpdate }: { config: any; onUpdate?: (c: any) => void }) {
   const images: string[] = config.images || [];
+  const isEditable = !!onUpdate;
+
+  // ── Drag state ──
+  const [draggedImgIdx, setDraggedImgIdx] = useState<number | null>(null);
+  const [dropImgIdx, setDropImgIdx] = useState<number | null>(null);
+  const [isLibDragOver, setIsLibDragOver] = useState(false);
+
+  const moveImage = (from: number, to: number) => {
+    if (!onUpdate) return;
+    const newImages = [...images];
+    const [moved] = newImages.splice(from, 1);
+    newImages.splice(to, 0, moved);
+    onUpdate({ ...config, images: newImages });
+  };
+
+  const removeImage = (i: number) => {
+    if (!onUpdate) return;
+    onUpdate({ ...config, images: images.filter((_, idx) => idx !== i) });
+  };
+
+  // ── Gallery image drag handlers ──
+  const handleImgDragStart = (e: React.DragEvent, idx: number) => {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("application/x-gallery-img-idx", String(idx));
+    setDraggedImgIdx(idx);
+  };
+
+  const handleImgDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = draggedImgIdx !== null ? "move" : "copy";
+    setDropImgIdx(idx);
+  };
+
+  const handleImgDrop = (e: React.DragEvent, toIdx: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Drop from media library
+    const mediaPath = e.dataTransfer.getData(MEDIA_DRAG_KEY);
+    if (mediaPath && onUpdate) {
+      const newImages = [...images];
+      newImages.splice(toIdx, 0, mediaPath);
+      onUpdate({ ...config, images: newImages });
+      setDraggedImgIdx(null); setDropImgIdx(null); setIsLibDragOver(false);
+      return;
+    }
+    // Reorder within gallery
+    const fromIdx = parseInt(e.dataTransfer.getData("application/x-gallery-img-idx"), 10);
+    if (!isNaN(fromIdx) && fromIdx !== toIdx) moveImage(fromIdx, toIdx);
+    setDraggedImgIdx(null); setDropImgIdx(null);
+  };
+
+  const handleGridDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const mediaPath = e.dataTransfer.getData(MEDIA_DRAG_KEY);
+    if (mediaPath && onUpdate) onUpdate({ ...config, images: [...images, mediaPath] });
+    setIsLibDragOver(false);
+  };
+
   return (
-    <div className="py-20 px-8 bg-white">
+    // NO onDragOver/onDrop on the outer wrapper — let drags pass through to Asset Shelf
+    <div className={`relative py-20 px-8 transition-colors ${config.darkBackground ? "bg-zinc-900" : "bg-white"}`}>
+
+      {/* On-canvas background toggle — always visible in indigo */}
+      {isEditable && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onUpdate && onUpdate({ ...config, darkBackground: !config.darkBackground }); }}
+          className="absolute top-10 left-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl ring-2 ring-indigo-400/40 transition-all hover:scale-105 active:scale-95"
+          title="Toggle gallery background between Light and Dark"
+        >
+          {config.darkBackground ? "☀️ Switch to Light" : "🌙 Switch to Dark"}
+        </button>
+      )}
+
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-12">
-          <h2 className="text-4xl font-bold text-zinc-900 mb-4">{config.title || "Gallery"}</h2>
-          {config.subtitle && <p className="text-lg text-zinc-500">{config.subtitle}</p>}
+          <h2 className={`text-4xl font-bold mb-4 ${config.darkBackground ? "text-white" : "text-zinc-900"}`}>{config.title || "Gallery"}</h2>
+          {config.subtitle && <p className={`text-lg ${config.darkBackground ? "text-zinc-400" : "text-zinc-500"}`}>{config.subtitle}</p>}
         </div>
+
         <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
           {images.map((img, i) => (
-            <div key={i} className="aspect-[4/3] rounded-xl overflow-hidden shadow-md group">
+            <div
+              key={i}
+              draggable={isEditable}
+              onDragStart={(e) => isEditable && handleImgDragStart(e, i)}
+              onDragEnd={() => { setDraggedImgIdx(null); setDropImgIdx(null); }}
+              onDragOver={(e) => isEditable && handleImgDragOver(e, i)}
+              onDrop={(e) => isEditable && handleImgDrop(e, i)}
+              className={`relative aspect-[4/3] rounded-xl overflow-hidden shadow-md group transition-all ${
+                draggedImgIdx === i ? "opacity-40 scale-95 cursor-grabbing"
+                : dropImgIdx === i && draggedImgIdx !== i ? "ring-4 ring-indigo-400 scale-[1.03]"
+                : isEditable ? "cursor-grab" : ""
+              }`}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={resolveImageUrl(img)} alt={`Gallery ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+              <img src={resolveImageUrl(img)} alt={`Gallery ${i + 1}`}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 pointer-events-none"
+                draggable={false}
+              />
+              {isEditable && (
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex flex-col items-center justify-between p-2 opacity-0 group-hover:opacity-100">
+                  <div className="w-full flex justify-between items-start">
+                    <span className="bg-black/70 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">{i + 1} / {images.length}</span>
+                    <button onClick={(e) => { e.stopPropagation(); removeImage(i); }}
+                      className="bg-red-600/90 hover:bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md transition-colors"
+                    >✕ Remove</button>
+                  </div>
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => moveImage(i, 0)} disabled={i === 0}
+                      className="flex items-center gap-1 px-2 py-1 bg-amber-500/90 hover:bg-amber-400 disabled:opacity-30 disabled:cursor-not-allowed text-white text-[10px] font-bold rounded-lg transition-colors shadow-lg"
+                      title="Bring to Front"><ChevronsUp className="w-3 h-3" /> Front</button>
+                    <button onClick={() => { if (i > 0) moveImage(i, i - 1); }} disabled={i === 0}
+                      className="flex items-center gap-1 px-2 py-1 bg-zinc-700/90 hover:bg-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed text-white text-[10px] font-bold rounded-lg transition-colors shadow-lg"
+                    >◀ Prev</button>
+                    <button onClick={() => { if (i < images.length - 1) moveImage(i, i + 1); }} disabled={i === images.length - 1}
+                      className="flex items-center gap-1 px-2 py-1 bg-zinc-700/90 hover:bg-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed text-white text-[10px] font-bold rounded-lg transition-colors shadow-lg"
+                    >Next ▶</button>
+                    <button onClick={() => moveImage(i, images.length - 1)} disabled={i === images.length - 1}
+                      className="flex items-center gap-1 px-2 py-1 bg-amber-500/90 hover:bg-amber-400 disabled:opacity-30 disabled:cursor-not-allowed text-white text-[10px] font-bold rounded-lg transition-colors shadow-lg"
+                      title="Send to Back">Back <ChevronsDown className="w-3 h-3" /></button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
+
+        {/* Explicit drop zone — only this strip accepts media drops into the gallery */}
+        {isEditable && (
+          <div
+            onDragOver={(e) => {
+              if (e.dataTransfer.types.includes(MEDIA_DRAG_KEY)) {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsLibDragOver(true);
+              }
+            }}
+            onDragLeave={() => setIsLibDragOver(false)}
+            onDrop={(e) => { e.stopPropagation(); handleGridDrop(e); }}
+            className={`mt-4 flex items-center justify-center h-14 rounded-xl border-2 border-dashed transition-all cursor-default ${
+              isLibDragOver
+                ? "border-indigo-400 bg-indigo-50 text-indigo-600 scale-[1.01]"
+                : config.darkBackground
+                ? "border-zinc-600 text-zinc-500 hover:border-zinc-500"
+                : "border-zinc-300 text-zinc-400 hover:border-zinc-400"
+            }`}
+          >
+            <span className="text-xs font-medium">
+              {isLibDragOver ? "✓ Release to add to Gallery" : "🖼️ Drop here to add to Gallery · or use the Asset Shelf below"}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -638,13 +776,13 @@ function VideoBubbleRenderer({ config }: { config: any }) {
   );
 }
 
-function renderSectionContent(section: any) {
+function renderSectionContent(section: any, onUpdate?: (config: any) => void) {
   switch (section.type) {
     case "Hero": return <HeroRenderer config={section.config} />;
     case "Features": return <FeaturesRenderer config={section.config} />;
     case "Stats": return <StatsRenderer config={section.config} />;
     case "About": return <AboutRenderer config={section.config} />;
-    case "Gallery": return <GalleryRenderer config={section.config} />;
+    case "Gallery": return <GalleryRenderer config={section.config} onUpdate={onUpdate} />;
     case "Testimonials": return <TestimonialsRenderer config={section.config} />;
     case "Contact": return <ContactRenderer config={section.config} />;
     case "Video": return <VideoRenderer config={section.config} />;
@@ -714,7 +852,16 @@ function InlineBgUploader({ config, onUpdate }: { config: any; onUpdate: (c: any
   );
 }
 
+// ─── Section type icons ────────────────────────────────────────────────────
+const SECTION_ICONS: Record<string, string> = {
+  Hero: "🦸", Features: "✨", Stats: "📊", About: "🏢",
+  Gallery: "🖼️", Testimonials: "💬", Contact: "📩",
+  Video: "▶️", VideoBubble: "💬", Socials: "🌐", Pricing: "💰", FAQ: "❓", CTA: "🎯", Checkout: "💳"
+};
+
 // ─── Main Preview ─────────────────────────────────────────────────────────
+export const SECTION_DRAG_KEY = "application/x-section-drag";
+
 export function EditorPreview() {
   const { sections, activeSectionId, setActiveSection, removeSection, duplicateSection, reorderSections, updateSection } = useEditorStore();
 
@@ -727,29 +874,43 @@ export function EditorPreview() {
   };
 
   return (
-    <div className="flex-1 bg-zinc-800 overflow-y-auto">
-      {/* Page canvas */}
-      <div className="min-h-full">
-        {sections.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full min-h-[600px] gap-4">
-            <MousePointer2 className="w-12 h-12 text-zinc-600" />
-            <p className="text-zinc-500 text-lg font-medium">Your page is empty</p>
-            <p className="text-zinc-600 text-sm">Click "Add Section" in the sidebar to get started</p>
-          </div>
-        ) : (
-          <div>
-            {sections.map((section, index) => {
-              const isActive = activeSectionId === section.id;
-              return (
-                <div
-                  key={section.id}
-                  onClick={() => setActiveSection(section.id)}
-                  draggable
-                  onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; setDraggedIdx(index); }}
-                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
-                  onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDrop(index); }}
-                  className={`relative group cursor-pointer transition-all ${isActive ? "ring-2 ring-inset ring-indigo-500" : "hover:ring-2 hover:ring-inset hover:ring-indigo-400/50"} ${section.config?.isHidden ? 'opacity-50 grayscale' : ''} ${draggedIdx === index ? 'opacity-50' : ''}`}
-                >
+    <div className="flex-1 bg-zinc-800 overflow-y-auto pb-24">
+      {/* pb-24 = space for fixed Asset Shelf at bottom */}
+      {sections.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-full min-h-[600px] gap-4">
+          <MousePointer2 className="w-12 h-12 text-zinc-600" />
+          <p className="text-zinc-500 text-lg font-medium">Your page is empty</p>
+          <p className="text-zinc-600 text-sm">Click "Add Section" in the sidebar to get started</p>
+        </div>
+      ) : (
+        <div>
+          {sections.map((section, index) => {
+            const isActive = activeSectionId === section.id;
+            return (
+              <div
+                key={section.id}
+                onClick={() => setActiveSection(section.id)}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setData(SECTION_DRAG_KEY, String(index));
+                  setDraggedIdx(index);
+                }}
+                onDragOver={(e) => {
+                  // Only accept section-reordering drags — let media drags pass through to the shelf
+                  if (!e.dataTransfer.types.includes(SECTION_DRAG_KEY)) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(e) => {
+                  // Only handle section drops — ignore media drags so they reach the shelf
+                  if (!e.dataTransfer.types.includes(SECTION_DRAG_KEY)) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleDrop(index);
+                }}
+                className={`relative group cursor-pointer transition-all ${isActive ? "ring-2 ring-inset ring-indigo-500" : "hover:ring-2 hover:ring-inset hover:ring-indigo-400/50"} ${section.config?.isHidden ? 'opacity-50 grayscale' : ''} ${draggedIdx === index ? 'opacity-50' : ''}`}
+              >
                   {/* Hidden badge */}
                   {section.config?.isHidden && (
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/80 text-white font-bold py-2 px-4 rounded-xl z-40 flex items-center gap-2">
@@ -758,7 +919,10 @@ export function EditorPreview() {
                   )}
                   {/* Section content */}
                   <div className={section.config?.isHidden ? "pointer-events-none" : ""}>
-                    {renderSectionContent(section)}
+                    {renderSectionContent(
+                      section,
+                      isActive ? (newConfig) => updateSection(section.id, newConfig) : undefined
+                    )}
                   </div>
 
                   {isActive && section.type === "Hero" && (
@@ -769,16 +933,34 @@ export function EditorPreview() {
                   <div className={`absolute top-3 right-3 flex items-center gap-1.5 z-30 transition-opacity ${isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
                     <div className="flex items-center bg-zinc-900/90 backdrop-blur-sm rounded-lg border border-zinc-700 shadow-xl overflow-hidden">
                       <span className="px-2 py-1 text-xs font-bold text-indigo-400 border-r border-zinc-700">{section.type}</span>
+                      {/* Bring to Front */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); if (index > 0) reorderSections(index, 0); }}
+                        disabled={index === 0}
+                        className="px-2 py-1.5 text-zinc-300 hover:text-amber-300 hover:bg-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Bring to Front"
+                      ><ChevronsUp className="w-3.5 h-3.5" /></button>
+                      {/* Move up */}
                       <button
                         onClick={(e) => { e.stopPropagation(); if (index > 0) reorderSections(index, index - 1); }}
-                        className="px-2 py-1.5 text-zinc-300 hover:text-white hover:bg-zinc-700 transition-colors"
+                        disabled={index === 0}
+                        className="px-2 py-1.5 text-zinc-300 hover:text-white hover:bg-zinc-700 transition-colors border-l border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Move up"
                       ><ChevronUp className="w-3.5 h-3.5" /></button>
+                      {/* Move down */}
                       <button
                         onClick={(e) => { e.stopPropagation(); if (index < sections.length - 1) reorderSections(index, index + 1); }}
-                        className="px-2 py-1.5 text-zinc-300 hover:text-white hover:bg-zinc-700 transition-colors border-l border-zinc-700"
+                        disabled={index === sections.length - 1}
+                        className="px-2 py-1.5 text-zinc-300 hover:text-white hover:bg-zinc-700 transition-colors border-l border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Move down"
                       ><ChevronDown className="w-3.5 h-3.5" /></button>
+                      {/* Send to Back */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); if (index < sections.length - 1) reorderSections(index, sections.length - 1); }}
+                        disabled={index === sections.length - 1}
+                        className="px-2 py-1.5 text-zinc-300 hover:text-amber-300 hover:bg-zinc-700 transition-colors border-l border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Send to Back"
+                      ><ChevronsDown className="w-3.5 h-3.5" /></button>
                       <button
                         onClick={(e) => { e.stopPropagation(); duplicateSection(section.id); }}
                         className="px-2 py-1.5 text-zinc-300 hover:text-indigo-300 hover:bg-zinc-700 transition-colors border-l border-zinc-700"
@@ -792,18 +974,28 @@ export function EditorPreview() {
                     </div>
                   </div>
 
+                  {/* Hover section-name tag (non-active) */}
+                  {!isActive && (
+                    <div className="absolute top-0 left-0 z-30 opacity-0 group-hover:opacity-100 transition-all duration-150 translate-y-0 pointer-events-none">
+                      <div className="flex items-center gap-1 bg-zinc-900/85 backdrop-blur-sm text-zinc-200 text-[10px] font-semibold px-2 py-0.5 rounded-br-lg shadow-md border-r border-b border-zinc-700/50">
+                        <span className="text-[9px]">{SECTION_ICONS[section.type] || "📄"}</span>
+                        {section.type}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Active indicator label */}
                   {isActive && (
-                    <div className="absolute top-0 left-0 bg-indigo-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-br-lg z-30">
-                      Editing
+                    <div className="absolute top-0 left-0 bg-indigo-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-br-lg z-30 flex items-center gap-1">
+                      <span className="text-[9px]">{SECTION_ICONS[section.type] || "📄"}</span>
+                      Editing · {section.type}
                     </div>
                   )}
                 </div>
               );
             })}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

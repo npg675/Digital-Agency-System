@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, users, templates, pages, media, leads, analytics, campaigns, client_notes, campaign_tasks, notifications, activities, client_services, client_tasks, service_roles, workflows, appointments, calendar, invoices, portal, quotations, marketing_assets, billing, backup, inbox, social, integrations, reputation, funnels, payments, automations, courses, ai, campaign_bundle
+from app.api.v1.endpoints import auth, users, templates, pages, media, leads, analytics, campaigns, client_notes, campaign_tasks, notifications, activities, client_services, client_tasks, service_roles, workflows, appointments, calendar, invoices, portal, quotations, marketing_assets, billing, backup, inbox, social, integrations, reputation, funnels, payments, automations, courses, ai, campaign_bundle, video_settings, video_editor
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -36,3 +36,5 @@ api_router.include_router(payments.router, prefix="/payments", tags=["payments"]
 api_router.include_router(automations.router, prefix="/automations", tags=["automations"])
 api_router.include_router(courses.router, prefix="/courses", tags=["courses"])
 api_router.include_router(ai.router, prefix="/ai", tags=["ai"])
+api_router.include_router(video_settings.router, prefix="/settings", tags=["settings"])
+api_router.include_router(video_editor.router, prefix="/video-editor", tags=["video_editor"])
