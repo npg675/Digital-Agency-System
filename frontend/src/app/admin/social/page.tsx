@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Plus, Image as ImageIcon, Trash2, Edit2, Copy, Clock, CheckCircle2, Calendar as CalendarIcon, Wand2, Bold, Italic, Smile, Megaphone, ClipboardPaste, ZoomIn, ZoomOut, X, ExternalLink, Search } from "lucide-react";
-import { FaFacebook, FaInstagram, FaLinkedin, FaTwitter, FaTiktok, FaWhatsapp, FaEnvelope } from "react-icons/fa";
+import { FaFacebook, FaInstagram, FaLinkedin, FaTwitter, FaTiktok, FaWhatsapp, FaEnvelope, FaGoogle } from "react-icons/fa";
 import { MarketingHubPanel } from "@/components/MarketingHubPanel";
 import Draggable from "react-draggable";
 import { Button } from "@/components/ui/button";
@@ -483,6 +483,7 @@ export default function SocialMediaPage() {
                         {p === "TWITTER" && <FaTwitter className="w-4 h-4 text-[#1DA1F2]" />}
                         {p === "TIKTOK" && <FaTiktok className="w-4 h-4 text-black dark:text-white" />}
                         {p === "WHATSAPP" && <FaWhatsapp className="w-4 h-4 text-[#25D366]" />}
+                        {p === "GMB" && <FaGoogle className="w-4 h-4 text-[#4285F4]" />}
                         {p === "EMAIL" && <FaEnvelope className="w-4 h-4 text-zinc-500" />}
                       </span>
                     ))}
@@ -639,6 +640,7 @@ export default function SocialMediaPage() {
                   { id: 'TWITTER', icon: FaTwitter, color: 'text-[#1DA1F2]' },
                   { id: 'TIKTOK', icon: FaTiktok, color: 'text-black dark:text-white' },
                   { id: 'WHATSAPP', icon: FaWhatsapp, color: 'text-[#25D366]' },
+                  { id: 'GMB', icon: FaGoogle, color: 'text-[#4285F4]' },
                   { id: 'EMAIL', icon: FaEnvelope, color: 'text-zinc-500' }
                 ].map(platform => (
                   <button

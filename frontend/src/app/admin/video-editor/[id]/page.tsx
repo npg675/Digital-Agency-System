@@ -11,7 +11,7 @@ import {
   Download, Loader2, ArrowLeft, Volume2, Save, Undo, Redo, Plus, Trash2,
   SlidersHorizontal, CloudUpload, HardDrive, Upload, Sparkles, X, Layers,
   Keyboard, Magnet, Undo2, Redo2, Eye, EyeOff, VolumeX, Link2, Rewind, FastForward, Wand2, PenTool, Shapes, Square, Circle, Triangle, Eraser, Printer, Maximize, Maximize2, MousePointer2, Crop as CropIcon, Settings,
-  Folder, FolderOpen, ChevronUp, ChevronRight, Film, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine
+  Folder, FolderOpen, ChevronUp, ChevronRight, Film, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine, ListChecks, ArrowLeftToLine, ArrowRightToLine
 } from "lucide-react";
 import ReactCrop, { type Crop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
@@ -68,6 +68,20 @@ function useHistory<T>(initialState: T, maxHistory: number = 20) {
   return [current !== undefined ? current : initialState, setWithHistory, historyControls] as const;
 }
 
+// --- AudioClip type ---
+type AudioClip = {
+  id: string;
+  url: string;
+  name: string;
+  fileDuration: number; // Total original file length
+  duration: number;     // Effective visible length
+  trimStart: number;    // Where to start playing the underlying file
+  trimEnd: number;      // Where to stop playing the underlying file
+  startTime: number;    // Global position on the timeline
+  volume: number;       // For Per-Clip Volume (0-1)
+  isMuted?: boolean;    // Whether the clip is muted
+};
+
 // --- VideoClip type ---
 type VideoClip = {
   id: string;
@@ -114,9 +128,12 @@ type VideoClip = {
   tickerSpeed2?: number;
   tickerFontFamily2?: string;
   // Animation System
-  animationType?: "none" | "pulse" | "wiggle" | "float" | "spin" | "spin-cw" | "spin-ccw" | "blink" | "slide-in-left" | "slide-in-right" | "slide-in-bottom" | "slide-in-top";
+  animationType?: "none" | "pulse" | "wiggle" | "float" | "spin" | "spin-cw" | "spin-ccw" | "blink" | "slide-in-left" | "slide-in-right" | "slide-in-bottom" | "slide-in-top" | "zoom-in" | "zoom-out" | "shake" | "ken-burns" | "heartbeat" | "pop-in" | "3d-flip-h" | "3d-flip-v" | "3d-wobble" | "pass-through-lr" | "pass-through-rl" | "pass-through-tb" | "pass-through-bt" | "pro-whip-pan" | "pro-elastic" | "pro-push" | "pro-slider-left" | "pro-slider-right" | "pro-glitch" | "pro-pan-up" | "pro-pan-down";
   animationSpeed?: number; // 0.1 to 5.0 (multiplier)
   animationIntensity?: number; // 0.1 to 5.0 (multiplier)
+  // Transitions
+  transitionType?: "none" | "fade" | "wipeleft" | "wiperight" | "slideleft" | "slideright" | "circlecrop" | "pixelize" | "dissolve" | "flash-white" | "zoom-in";
+  transitionDuration?: number;
 };
 
 type VideoTrack = {
@@ -129,9 +146,13 @@ type VideoTrack = {
 // --- Aspect Ratio Presets ---
 const ASPECT_RATIOS = [
   { id: "16:9",  label: "YouTube (16:9)",    icon: "Monitor",    w: 640, h: 360,  ffmpegScale: "1920:1080", category: "Social"  },
-  { id: "9:16",  label: "TikTok / Reels",     icon: "Smartphone", w: 360, h: 640,  ffmpegScale: "1080:1920", category: "Social"  },
-  { id: "1:1",   label: "Instagram Square",  icon: "Square",     w: 480, h: 480,  ffmpegScale: "1080:1080", category: "Social" },
-  { id: "4:5",   label: "Instagram Portrait",       icon: "Square",     w: 432, h: 540,  ffmpegScale: "1080:1350", category: "Social" },
+  { id: "1920x1080", label: "Full HD Video (1920x1080 p)", icon: "Monitor", w: 640, h: 360, ffmpegScale: "1920:1080", category: "Social" },
+  { id: "9:16",  label: "TikTok / IG Reels (9:16)", icon: "Smartphone", w: 360, h: 640,  ffmpegScale: "1080:1920", category: "Social"  },
+  { id: "shorts", label: "YouTube Shorts (9:16)", icon: "Smartphone", w: 360, h: 640,  ffmpegScale: "1080:1920", category: "Social"  },
+  { id: "stories", label: "Instagram & FB Stories (9:16)", icon: "Smartphone", w: 360, h: 640, ffmpegScale: "1080:1920", category: "Social" },
+  { id: "1080x1920", label: "Full HD Portrait (1080x1920 p)", icon: "Smartphone", w: 360, h: 640, ffmpegScale: "1080:1920", category: "Social" },
+  { id: "1:1",   label: "Instagram Square (1:1)",  icon: "Square",     w: 480, h: 480,  ffmpegScale: "1080:1080", category: "Social" },
+  { id: "4:5",   label: "Instagram Portrait (4:5)",       icon: "Square",     w: 432, h: 540,  ffmpegScale: "1080:1350", category: "Social" },
   { id: "twitter",label: "X / Twitter Post", icon: "Hash",       w: 640, h: 360,  ffmpegScale: "1200:675", category: "Social" },
   { id: "linkedin",label: "LinkedIn Banner", icon: "Image",      w: 640, h: 160,  ffmpegScale: "1584:396", category: "Social" },
   { id: "a4",    label: "A4 Print",   icon: "Printer",    w: 450, h: 637,  ffmpegScale: "2480:3508", category: "Print" },
@@ -225,6 +246,29 @@ const DEFAULT_AUDIOS = [
 const STICKERS = [
   "🔥","⚡","🎯","🚀","💥","✨","🎉","💡","❤️","👑","🏆","💰","📢","⭐","🎬","💪",
 ];
+
+// --- Helper: Convert data URL to Blob ---
+function dataUrlToBlob(dataUrl: string): Blob {
+  try {
+     const arr = dataUrl.split(',');
+     const mimeMatch = arr[0].match(/:(.*?);/);
+     const mime = mimeMatch ? mimeMatch[1] : "image/png";
+     const bstr = atob(arr[1]);
+     let n = bstr.length;
+     const u8arr = new Uint8Array(n);
+     while(n--){
+         u8arr[n] = bstr.charCodeAt(n);
+     }
+     return new Blob([u8arr], {type: mime});
+  } catch(err) {
+     console.error("Failed to convert dataURL to Blob", err);
+     const bstr = atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=");
+     let n = bstr.length;
+     const u8arr = new Uint8Array(n);
+     while(n--) { u8arr[n] = bstr.charCodeAt(n); }
+     return new Blob([u8arr], {type: "image/png"});
+  }
+}
 
 // --- Font families ---
 const FONTS = ["Arial","Georgia","Impact","Courier New","Verdana","Trebuchet MS", "Outfit", "Russo One", "Inter", "Poppins", "Mukta", "Yatra One", "Khand", "Teko", "Kalam", "Preeti", "Kruti Dev 010"];
@@ -397,7 +441,7 @@ export default function VideoEditorPage() {
   const [progress, setProgress] = useState(0);
   
   // Selection State
-  const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+  const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
 
   const [activeFilterId, setActiveFilterId] = useState("none");
   const [activeTab, setActiveTab] = useState("media");
@@ -433,7 +477,7 @@ export default function VideoEditorPage() {
   }, []);
 
   // Media Library State
-  type MediaItem = { id: string; name: string; url: string; duration: number; thumbnail: string; size: number };
+  type MediaItem = { id: string; name: string; url: string; duration: number; thumbnail: string; size: number; type: "video" | "image" };
   const [mediaLibrary, setMediaLibrary] = useState<MediaItem[]>([]);
   const [mediaSearch, setMediaSearch] = useState("");
   const mediaLibInputRef = useRef<HTMLInputElement>(null);
@@ -461,7 +505,9 @@ export default function VideoEditorPage() {
     const newItems: MediaItem[] = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      if (!file.type.startsWith("video/")) continue;
+      const isImage = file.type.startsWith("image/");
+      const isVideo = file.type.startsWith("video/");
+      if (!isImage && !isVideo) continue;
       
       showToast(`Uploading ${file.name}...`, "info");
       try {
@@ -476,18 +522,28 @@ export default function VideoEditorPage() {
         }
         
         const persistentUrl = data.url;
-        const tmpUrl = URL.createObjectURL(file);
+        let duration = 5;
+        let thumbnail = persistentUrl;
         
-        const duration = await new Promise<number>((res) => {
-          const v = document.createElement("video");
-          v.src = tmpUrl;
-          v.onloadedmetadata = () => res(v.duration);
-          v.onerror = () => res(0);
+        if (isVideo) {
+          duration = await new Promise<number>((res) => {
+            const v = document.createElement("video");
+            v.src = persistentUrl;
+            v.onloadedmetadata = () => res(v.duration);
+            v.onerror = () => res(0);
+          });
+          thumbnail = await generateThumbnail(persistentUrl);
+        }
+        
+        newItems.push({
+          id: crypto.randomUUID(),
+          name: file.name,
+          url: persistentUrl,
+          duration,
+          thumbnail,
+          size: file.size,
+          type: isImage ? "image" : "video"
         });
-        const thumbnail = await generateThumbnail(tmpUrl);
-        URL.revokeObjectURL(tmpUrl);
-        
-        newItems.push({ id: crypto.randomUUID(), name: file.name, url: persistentUrl, duration, thumbnail, size: file.size });
       } catch (err) {
         console.error(err);
         showToast(`Error uploading ${file.name}`, "error");
@@ -499,10 +555,48 @@ export default function VideoEditorPage() {
     }
   };
 
+  const adjustCanvasToVideoRatio = (rVideo: number) => {
+    let closestPreset = ASPECT_RATIOS[0];
+    let minDiff = Infinity;
+    
+    ASPECT_RATIOS.forEach(ar => {
+      const arRatio = ar.w / ar.h;
+      const diff = Math.abs(arRatio - rVideo);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestPreset = ar;
+      }
+    });
+    
+    setAspectRatio(closestPreset);
+    showToast(`Canvas resized to match video format: ${closestPreset.label}`, "info");
+  };
+
   const addMediaToTimeline = (item: MediaItem) => {
+    const isImage = item.type === "image";
+    if (clips.length === 0) {
+      if (isImage) {
+        const img = new window.Image();
+        img.src = item.url;
+        img.onload = () => {
+          adjustCanvasToVideoRatio(img.width / img.height);
+        };
+      } else {
+        const v = document.createElement("video");
+        v.src = item.url;
+        v.onloadedmetadata = () => {
+          const videoW = v.videoWidth || 1920;
+          const videoH = v.videoHeight || 1080;
+          adjustCanvasToVideoRatio(videoW / videoH);
+          v.remove();
+        };
+        v.onerror = () => v.remove();
+      }
+    }
+
     const newClip: VideoClip = {
       id: crypto.randomUUID(),
-      type: "video",
+      type: isImage ? "image" : "video",
       name: item.name.replace(/\.[^.]+$/, ""),
       url: item.url,
       fileDuration: item.duration,
@@ -511,14 +605,14 @@ export default function VideoEditorPage() {
       trimEnd: item.duration,
       startTime: globalTime,
       trackId: videoTracks[0]?.id || "v1",
-      color: `hsl(${Math.floor(Math.random()*360)}, 70%, 55%)`,
+      color: isImage ? "#e11d48" : `hsl(${Math.floor(Math.random()*360)}, 70%, 55%)`,
       x: 0, y: 0, videoZoom: 1,
       brightness: 0, contrast: 1, saturate: 1, sepia: 0, hueRotate: 0,
       enableChromaKey: false, chromaKeyColor: "#00ff00", chromaKeySimilarity: 0.3,
-      playbackRate: 1, volume: 1, opacity: 1,
+      playbackRate: 1, volume: isImage ? 0 : 1, opacity: 1,
     };
     setClips(prev => [...prev, newClip]);
-    setSelectedClipId(newClip.id);
+    setSelectedClipIds([newClip.id]);
     showToast(`"${newClip.name}" added to timeline`, "success");
   };
 
@@ -577,7 +671,16 @@ export default function VideoEditorPage() {
     clips: VideoClip[];
     videoUrl: string | null;
     originalVideoUrl: string | null;
-    audioUrl: string | null;
+    audioClips?: AudioClip[];
+    
+    // Legacy support for older drafts
+    audioUrl?: string | null;
+    audioStartTime?: number;
+    audioDuration?: number;
+    audioTrimStart?: number;
+    audioTrimEnd?: number;
+    audioVolume?: number;
+
     canvasJson: object | null;
   };
   const [drafts, setDrafts] = useState<VideoDraft[]>([]);
@@ -730,7 +833,7 @@ export default function VideoEditorPage() {
   const [timecodeInput, setTimecodeInput] = useState("");
 
   const videoRefs = useRef<Record<string, HTMLVideoElement>>({});
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioRefs = useRef<Record<string, HTMLAudioElement>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const tracksAreaRef = useRef<HTMLDivElement>(null);
@@ -748,30 +851,68 @@ export default function VideoEditorPage() {
   const [brushColor, setBrushColor] = useState("#ffffff");
   const [brushSize, setBrushSize] = useState(5);
   const [isEraser, setIsEraser] = useState(false);
-  const [shapeColor, ShapeColor] = useState("#indigo-500");
+  const [shapeColor, ShapeColor] = useState("#6366f1");
   
   // Multi-clip state
   const [videoTracks, setVideoTracks] = useState<VideoTrack[]>([{ id: "v1", name: "V1" }]);
-  const [clips, setClips, historyState] = useHistory<VideoClip[]>([]);
+  const [clips, setClips, historyState] = useHistory<VideoClip[]>([], 50);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);   // currently playing clip URL
   const [originalVideoUrl, setOriginalVideoUrl] = useState<string | null>(null); // kept for single-clip compat
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioClips, setAudioClips, audioHistoryState] = useHistory<AudioClip[]>([], 50);
+  const [selectedAudioClipId, setSelectedAudioClipId] = useState<string | null>(null);
+
+  const [audioDragState, setAudioDragState] = useState<{
+    clipId: string;
+    type: 'move' | 'trimStart' | 'trimEnd' | 'slip';
+    startX: number;
+    initialStart: number;
+    initialDuration: number;
+    initialTrimStart: number;
+    initialTrimEnd: number;
+    fileDuration: number;
+    initialTotalDuration: number;
+  } | null>(null);
   // Canvas assets list (for Assets panel)
   const [canvasAssets, setCanvasAssets] = useState<{ id: string; label: string; obj: fabric.Object; startTime: number; endTime: number; animationType?: string; animationSpeed?: number; animationIntensity?: number }[]>([]);
   const refreshAssets = useCallback(() => {
     if (!fabricCanvasRef.current) return;
     const objects = fabricCanvasRef.current.getObjects();
-    setCanvasAssets(objects.map((o, i) => ({
-      id: (o as any).id || String(i),
-      label: (o as any).text ? `Text: "${((o as any).text as string).substring(0, 20)}"` :
-             (o as any).getSrc ? "Image / Logo" : `Object ${i + 1}`,
-      obj: o,
-      startTime: (o as any).startTime || 0,
-      endTime: (o as any).endTime || 9999,
-      animationType: (o as any).animationType || "none",
-      animationSpeed: (o as any).animationSpeed || 1.0,
-      animationIntensity: (o as any).animationIntensity || 1.0,
-    })));
+    setCanvasAssets(objects.map((o: any, i: number) => {
+      const id = (o as any).id || "";
+      let label = `Object ${i + 1}`;
+      if (id.startsWith("txt-")) {
+        label = `Text: "${((o as any).text as string || "").substring(0, 15)}"`;
+      } else if (id.startsWith("stk-")) {
+        label = `Sticker: ${(o as any).text || "Emoji"}`;
+      } else if (id.startsWith("shp-")) {
+        const typeMap: Record<string, string> = {
+          rect: "Rectangle",
+          circle: "Circle",
+          triangle: "Triangle"
+        };
+        const shapeType = typeMap[o.type || ""] || o.type || "Shape";
+        label = `Shape: ${shapeType}`;
+      } else if (id.startsWith("img-")) {
+        label = "Image / Logo";
+      } else if (o.type === 'path') {
+        label = "Drawing";
+      } else if ((o as any).text) {
+        label = `Text: "${((o as any).text as string || "").substring(0, 15)}"`;
+      } else if ((o as any).getSrc) {
+        label = "Image / Logo";
+      }
+      
+      return {
+        id: id || String(i),
+        label,
+        obj: o,
+        startTime: (o as any).startTime || 0,
+        endTime: (o as any).endTime || 9999,
+        animationType: (o as any).animationType || "none",
+        animationSpeed: (o as any).animationSpeed || 1.0,
+        animationIntensity: (o as any).animationIntensity || 1.0,
+      };
+    }));
   }, []);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [assetDragState, setAssetDragState] = useState<{
@@ -791,6 +932,8 @@ export default function VideoEditorPage() {
     initialTrimStart: number;
     initialTrimEnd: number;
     fileDuration: number;
+    initialTotalDuration: number;
+    groupedClips?: { id: string, initialStart: number }[];
   } | null>(null);
 
   const [fadeDragState, setFadeDragState] = useState<{
@@ -798,6 +941,7 @@ export default function VideoEditorPage() {
     type: 'fadeIn' | 'fadeOut';
     startX: number;
     initialFade: number;
+    initialTotalDuration: number;
   } | null>(null);
   
   // Drag to reorder clips
@@ -888,8 +1032,10 @@ export default function VideoEditorPage() {
         setSelectedObj(e.selected?.[0] ?? null); 
         refreshAssets(); 
         if (e.selected && e.selected.length > 0 && e.selected[0].id !== 'video-proxy') {
+           setSelectedClipIds([]);
            setActiveTab("adjust");
            const id = e.selected[0].id || "";
+           setSelectedAssetId(id);
            if (id.startsWith("txt-")) setLeftPanel("text");
            else if (id.startsWith("stk-")) setLeftPanel("stickers");
            else if (id.startsWith("shp-")) setLeftPanel("shapes");
@@ -899,8 +1045,10 @@ export default function VideoEditorPage() {
         setSelectedObj(e.selected?.[0] ?? null); 
         refreshAssets(); 
         if (e.selected && e.selected.length > 0 && e.selected[0].id !== 'video-proxy') {
+           setSelectedClipIds([]);
            setActiveTab("adjust");
            const id = e.selected[0].id || "";
+           setSelectedAssetId(id);
            if (id.startsWith("txt-")) setLeftPanel("text");
            else if (id.startsWith("stk-")) setLeftPanel("stickers");
            else if (id.startsWith("shp-")) setLeftPanel("shapes");
@@ -1000,6 +1148,37 @@ export default function VideoEditorPage() {
     }
   }, [aspectRatio]);
 
+  // Keep tickers snapped to the bottom when aspect ratio changes
+  useEffect(() => {
+    setClips(prev => {
+      let changed = false;
+      const updated = prev.map(clip => {
+        if (clip.type === "ticker") {
+          const fontSize1 = clip.tickerFontSize || 32;
+          const h1Px = fontSize1 * 1.2;
+          
+          let h2Px = 0;
+          const fontSize2 = clip.tickerFontSize2 || 24;
+          if (clip.enableSecondaryTicker) {
+            h2Px = fontSize2 * 1.2;
+          }
+
+          const paddingPx = Math.max(fontSize1, fontSize2) * 0.8;
+          const totalHeightPx = h1Px + h2Px + paddingPx;
+          const heightPct = (totalHeightPx / aspectRatio.h) * 100;
+          const targetY = parseFloat(Math.max(0, 100 - heightPct).toFixed(2));
+          
+          if (clip.y !== targetY) {
+            changed = true;
+            return { ...clip, y: targetY };
+          }
+        }
+        return clip;
+      });
+      return changed ? updated : prev;
+    });
+  }, [aspectRatio, setClips]);
+
   useEffect(() => {
     const loadFfmpeg = async () => {
       const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
@@ -1043,17 +1222,36 @@ export default function VideoEditorPage() {
   }, [clips, videoTracks]);
 
   const activeClips = getActiveClipsAtTime(globalTime);
-  const selectedClip = clips.find(c => c.id === selectedClipId) || null;
+  const primarySelectedClipId = selectedClipIds[0] || null;
+  const selectedClip = clips.find(c => c.id === primarySelectedClipId) || null;
 
-  // Clip total duration (sum)
-  const totalDuration = clips.length > 0 
-    ? Math.max(...clips.map(c => c.startTime + c.duration), 1)
-    : 1;
+  // Clip total duration (sum) with padding and drag stability
+  const rawTotal = Math.max(
+    10, // Minimum 10 seconds
+    clips.length > 0 ? Math.max(...clips.map(c => c.startTime + c.duration)) : 0,
+    audioClips.length > 0 ? Math.max(...audioClips.map(a => a.startTime + a.duration)) : 0
+  ) + 2; // Add 2 seconds padding so clips don't hug the absolute edge
+
+  const [dragMaxDuration, setDragMaxDuration] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (clipDragState || audioDragState || fadeDragState || assetDragState) {
+       if (dragMaxDuration === null) {
+          setDragMaxDuration(rawTotal);
+       } else if (rawTotal > dragMaxDuration) {
+          setDragMaxDuration(rawTotal);
+       }
+    } else {
+       setDragMaxDuration(null);
+    }
+  }, [clipDragState, audioDragState, fadeDragState, assetDragState, rawTotal, dragMaxDuration]);
+
+  const totalDuration = dragMaxDuration !== null ? Math.max(rawTotal, dragMaxDuration) : rawTotal;
 
   const updateSelectedClip = useCallback((updates: Partial<VideoClip>) => {
-    if (!selectedClipId) return;
+    if (selectedClipIds.length === 0) return;
     setClips(prev => prev.map(c => {
-      if (c.id === selectedClipId) {
+      if (selectedClipIds.includes(c.id)) {
         const merged = { ...c, ...updates };
         if (updates.trimStart !== undefined || updates.trimEnd !== undefined || updates.playbackRate !== undefined) {
            const tStart = merged.trimStart || 0;
@@ -1065,7 +1263,7 @@ export default function VideoEditorPage() {
       }
       return c;
     }));
-  }, [selectedClipId, setClips]);
+  }, [selectedClipIds, setClips]);
 
   // --- Master Sync Engine ---
   // globalTime drives everything. videos sync to it.
@@ -1100,14 +1298,16 @@ export default function VideoEditorPage() {
             const isActive = activeObj === o;
             
             if (gTime >= startTime && gTime <= endTime) {
-                if (o._baseScaleX === undefined) {
-                   o._baseScaleX = o.scaleX;
-                   o._baseScaleY = o.scaleY;
-                   o._baseAngle = o.angle;
-                   o._baseLeft = o.left;
-                   o._baseTop = o.top;
-                   o._baseOpacity = o.opacity ?? 1;
+                if (!o.visible) {
+                    o.set({ visible: true });
+                    needsRender = true;
                 }
+                if (o._baseScaleX === undefined || isNaN(o._baseScaleX)) o._baseScaleX = isNaN(o.scaleX) ? 1 : o.scaleX;
+                if (o._baseScaleY === undefined || isNaN(o._baseScaleY)) o._baseScaleY = isNaN(o.scaleY) ? 1 : o.scaleY;
+                if (o._baseAngle === undefined || isNaN(o._baseAngle)) o._baseAngle = isNaN(o.angle) ? 0 : o.angle;
+                if (o._baseLeft === undefined || isNaN(o._baseLeft)) o._baseLeft = isNaN(o.left) ? 0 : o.left;
+                if (o._baseTop === undefined || isNaN(o._baseTop)) o._baseTop = isNaN(o.top) ? 0 : o.top;
+                if (o._baseOpacity === undefined || isNaN(o._baseOpacity)) o._baseOpacity = isNaN(o.opacity) ? 1 : o.opacity;
 
                 const isDragging = (fabricCanvasRef.current as any)?.__isDragging;
 
@@ -1116,7 +1316,8 @@ export default function VideoEditorPage() {
                     const intensity = o.animationIntensity || 1.0;
                     const localTime = gTime - startTime;
                     
-                    let scale = 1;
+                    let scaleXAnim = 1;
+                    let scaleYAnim = 1;
                     let rotate = 0;
                     let xOffset = 0;
                     let yOffset = 0;
@@ -1126,7 +1327,7 @@ export default function VideoEditorPage() {
                     const animTime = isActive ? nowSec : localTime;
 
                     switch(animType) {
-                       case 'pulse': scale = 1 + Math.sin(animTime * Math.PI * 2 * speed) * 0.1 * intensity; break;
+                       case 'pulse': scaleXAnim = scaleYAnim = 1 + Math.sin(animTime * Math.PI * 2 * speed) * 0.1 * intensity; break;
                        case 'wiggle': rotate = Math.sin(animTime * Math.PI * 2 * speed) * 15 * intensity; break;
                        case 'float': yOffset = Math.sin(animTime * Math.PI * 2 * speed) * 10 * intensity; break;
                        case 'spin':
@@ -1137,14 +1338,87 @@ export default function VideoEditorPage() {
                        case 'slide-in-right': if (localTime < 1/speed) xOffset = 200 - (localTime * speed * 200); break;
                        case 'slide-in-bottom': if (localTime < 1/speed) yOffset = 200 - (localTime * speed * 200); break;
                        case 'slide-in-top': if (localTime < 1/speed) yOffset = -200 + (localTime * speed * 200); break;
+                       case 'zoom-in': scaleXAnim = scaleYAnim = 1 + (localTime * speed * 0.1 * intensity); break;
+                       case 'zoom-out': scaleXAnim = scaleYAnim = Math.max(0, 1.2 - (localTime * speed * 0.1 * intensity)); break;
+                       case 'shake': 
+                          xOffset = (Math.sin(animTime * 20 * speed) + Math.sin(animTime * 35 * speed)) * 5 * intensity;
+                          yOffset = (Math.cos(animTime * 25 * speed) + Math.sin(animTime * 40 * speed)) * 5 * intensity;
+                          break;
+                       case 'ken-burns':
+                          scaleXAnim = scaleYAnim = 1 + (localTime * speed * 0.05 * intensity);
+                          xOffset = (localTime * speed * 5 * intensity);
+                          yOffset = (localTime * speed * 2 * intensity);
+                          break;
+                       case 'heartbeat':
+                          const beat = (animTime * speed) % 1;
+                          scaleXAnim = scaleYAnim = 1 + (beat < 0.2 ? Math.sin(beat * 5 * Math.PI) * 0.2 * intensity : (beat > 0.3 && beat < 0.5 ? Math.sin((beat - 0.3) * 5 * Math.PI) * 0.2 * intensity : 0));
+                          break;
+                       case 'pop-in':
+                          if (localTime < 1/speed) {
+                             const t = localTime * speed;
+                             scaleXAnim = scaleYAnim = 1 + Math.sin(t * Math.PI * 3) * Math.exp(-t * 5) * intensity;
+                          }
+                          break;
+                       case '3d-flip-h': scaleXAnim = Math.cos(animTime * Math.PI * 2 * speed); break;
+                       case '3d-flip-v': scaleYAnim = Math.cos(animTime * Math.PI * 2 * speed); break;
+                       case '3d-wobble': 
+                          scaleXAnim = 1 + Math.sin(animTime * Math.PI * 2 * speed) * 0.1 * intensity;
+                          scaleYAnim = 1 + Math.cos(animTime * Math.PI * 2 * speed) * 0.1 * intensity;
+                          break;
+                       case 'pass-through-lr':
+                          const durLR = endTime - startTime;
+                          if (localTime < 1/speed) xOffset = -200 + (localTime * speed * 200);
+                          else if (localTime > durLR - 1/speed) xOffset = (localTime - (durLR - 1/speed)) * speed * 200;
+                          break;
+                       case 'pass-through-rl':
+                          const durRL = endTime - startTime;
+                          if (localTime < 1/speed) xOffset = 200 - (localTime * speed * 200);
+                          else if (localTime > durRL - 1/speed) xOffset = -(localTime - (durRL - 1/speed)) * speed * 200;
+                          break;
+                       case 'pass-through-tb':
+                          const durTB = endTime - startTime;
+                          if (localTime < 1/speed) yOffset = -200 + (localTime * speed * 200);
+                          else if (localTime > durTB - 1/speed) yOffset = (localTime - (durTB - 1/speed)) * speed * 200;
+                          break;
+                       case 'pass-through-bt':
+                          const durBT = endTime - startTime;
+                          if (localTime < 1/speed) yOffset = 200 - (localTime * speed * 200);
+                          else if (localTime > durBT - 1/speed) yOffset = -(localTime - (durBT - 1/speed)) * speed * 200;
+                          break;
+                       case 'pro-whip-pan':
+                          xOffset = -500 * Math.exp(-localTime * speed * 12) * intensity;
+                          break;
+                       case 'pro-elastic':
+                          const tE = localTime * speed;
+                          scaleXAnim = scaleYAnim = 1 - Math.exp(-tE * 6) * Math.cos(tE * 15) * intensity;
+                          break;
+                       case 'pro-push':
+                          scaleXAnim = scaleYAnim = 1 + (localTime * speed * 0.02 * intensity);
+                          break;
+                       case 'pro-slider-left':
+                          xOffset = -(localTime * speed * 10 * intensity);
+                          break;
+                       case 'pro-slider-right':
+                          xOffset = (localTime * speed * 10 * intensity);
+                          break;
+                       case 'pro-glitch':
+                          xOffset = (Math.random() - 0.5) * 20 * intensity;
+                          yOffset = (Math.random() - 0.5) * 5 * intensity;
+                          break;
+                       case 'pro-pan-up':
+                          yOffset = -(localTime * speed * 8 * intensity);
+                          break;
+                       case 'pro-pan-down':
+                          yOffset = (localTime * speed * 8 * intensity);
+                          break;
                     }
                     
                     o.set({
-                        scaleX: o._baseScaleX * scale,
-                        scaleY: o._baseScaleY * scale,
-                        angle: o._baseAngle + rotate,
-                        left: o._baseLeft + xOffset,
-                        top: o._baseTop + yOffset,
+                        scaleX: (o._baseScaleX || 1) * scaleXAnim,
+                        scaleY: (o._baseScaleY || 1) * scaleYAnim,
+                        angle: (o._baseAngle || 0) + rotate,
+                        left: (o._baseLeft || 0) + xOffset,
+                        top: (o._baseTop || 0) + yOffset,
                         opacity: (o._baseOpacity ?? 1) * alpha,
                         visible: true
                     });
@@ -1210,20 +1484,30 @@ export default function VideoEditorPage() {
        }
     });
 
-    // Global background audio sync
-    if (audioRef.current) {
-      if (Math.abs(audioRef.current.currentTime - globalTime) > 0.15) {
-        audioRef.current.currentTime = globalTime;
+    // Sync Audio Clips
+    audioClips.forEach(audio => {
+      const aRef = audioRefs.current[audio.id];
+      if (aRef) {
+        if (globalTime >= audio.startTime && globalTime <= audio.startTime + audio.duration) {
+          const localTime = audio.trimStart + (globalTime - audio.startTime);
+          if (Math.abs(aRef.currentTime - localTime) > 0.15) {
+            aRef.currentTime = localTime;
+          }
+          if (isPlaying && aRef.paused) {
+            aRef.play().catch(e => console.log(e));
+          } else if (!isPlaying && !aRef.paused) {
+            aRef.pause();
+          }
+        } else {
+          if (!aRef.paused) {
+            aRef.pause();
+          }
+        }
+        aRef.playbackRate = playbackSpeed;
+        aRef.volume = audio.isMuted ? 0 : masterVolume * (audio.volume ?? 1.0);
       }
-      if (isPlaying && audioRef.current.paused) {
-        audioRef.current.play().catch(e => console.log(e));
-      } else if (!isPlaying && !audioRef.current.paused) {
-        audioRef.current.pause();
-      }
-      audioRef.current.playbackRate = playbackSpeed;
-      audioRef.current.volume = masterVolume;
-    }
-  }, [globalTime, isPlaying, activeClips, playbackSpeed, videoTracks, masterVolume]);
+    });
+  }, [globalTime, isPlaying, activeClips, playbackSpeed, videoTracks, masterVolume, audioClips]);
 
   // Auto-scroll timeline during playback
   useEffect(() => {
@@ -1363,28 +1647,35 @@ export default function VideoEditorPage() {
       setClips(prev => {
         let snapPoints = [0, globalTimeRef.current];
         prev.forEach(c => {
-           if (c.id !== clipDragState.clipId) {
+           if (c.id !== clipDragState.clipId && !clipDragState.groupedClips?.some(g => g.id === c.id)) {
              snapPoints.push(c.startTime);
              snapPoints.push(c.startTime + c.duration);
            }
         });
         const SNAP_THRESHOLD = (8 / trackWidth) * (totalDuration || 1); // 8px threshold
 
-        return prev.map(c => {
-          if (c.id !== clipDragState.clipId) return c;
-
-          if (clipDragState.type === 'move') {
+        let actualDelta = deltaTime;
+        if (clipDragState.type === 'move') {
             let newStart = Math.max(0, clipDragState.initialStart + deltaTime);
             let newEnd = newStart + clipDragState.initialDuration;
-            
             if (isSnappingEnabledRef.current) {
                let closestStartSnap = snapPoints.find(p => Math.abs(p - newStart) < SNAP_THRESHOLD);
                let closestEndSnap = snapPoints.find(p => Math.abs(p - newEnd) < SNAP_THRESHOLD);
                if (closestStartSnap !== undefined) newStart = closestStartSnap;
                else if (closestEndSnap !== undefined) newStart = closestEndSnap - clipDragState.initialDuration;
             }
-            
-            return { ...c, startTime: newStart, trackId: hoverTrackId || c.trackId };
+            actualDelta = newStart - clipDragState.initialStart;
+        }
+
+        return prev.map(c => {
+          if (clipDragState.type === 'move' && c.id !== clipDragState.clipId && clipDragState.groupedClips?.some(g => g.id === c.id)) {
+             const grouped = clipDragState.groupedClips.find(g => g.id === c.id)!;
+             return { ...c, startTime: Math.max(0, grouped.initialStart + actualDelta) };
+          }
+          if (c.id !== clipDragState.clipId) return c;
+
+          if (clipDragState.type === 'move') {
+            return { ...c, startTime: clipDragState.initialStart + actualDelta, trackId: hoverTrackId || c.trackId };
           } else if (clipDragState.type === 'trimStart') {
             let newStartTime = clipDragState.initialStart + deltaTime;
             let currentDeltaTime = deltaTime;
@@ -1453,7 +1744,80 @@ export default function VideoEditorPage() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [clipDragState, totalDuration]);
+  }, [clipDragState]);
+
+  // Audio drag handling
+  useEffect(() => {
+    if (!audioDragState) return;
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      const container = tracksAreaRef.current;
+      if (!container) return;
+      
+      const trackWidth = container.scrollWidth - 80;
+      const deltaPx = e.clientX - audioDragState.startX;
+      let deltaTime = (deltaPx / trackWidth) * (audioDragState.initialTotalDuration || 1);
+      
+      setAudioClips(prev => prev.map(c => {
+        if (c.id !== audioDragState.clipId) return c;
+        let newClip = { ...c };
+        
+        if (audioDragState.type === 'move') {
+            newClip.startTime = audioDragState.initialStart + deltaTime;
+        } else if (audioDragState.type === 'slip') {
+            let newTrimStart = audioDragState.initialTrimStart - deltaTime;
+            let newTrimEnd = audioDragState.initialTrimEnd - deltaTime;
+
+            if (newTrimStart < 0) {
+                const offset = 0 - newTrimStart;
+                newTrimStart += offset;
+                newTrimEnd += offset;
+            }
+            if (newTrimEnd > audioDragState.fileDuration) {
+                const offset = newTrimEnd - audioDragState.fileDuration;
+                newTrimEnd -= offset;
+                newTrimStart -= offset;
+            }
+
+            newClip.trimStart = newTrimStart;
+            newClip.trimEnd = newTrimEnd;
+        } else if (audioDragState.type === 'trimStart') {
+            let newStartTime = Math.max(0, audioDragState.initialStart + deltaTime);
+            let currentDeltaTime = newStartTime - audioDragState.initialStart;
+            let newTrimStart = audioDragState.initialTrimStart + currentDeltaTime;
+            
+            if (newTrimStart >= audioDragState.initialTrimEnd - 0.2) {
+                newTrimStart = audioDragState.initialTrimEnd - 0.2;
+                newStartTime = audioDragState.initialStart + (newTrimStart - audioDragState.initialTrimStart);
+            }
+            newClip.startTime = newStartTime;
+            newClip.trimStart = newTrimStart;
+            newClip.duration = audioDragState.initialTrimEnd - newTrimStart;
+        } else if (audioDragState.type === 'trimEnd') {
+            let currentDeltaTime = deltaTime;
+            let newTrimEnd = audioDragState.initialTrimEnd + currentDeltaTime;
+            if (newTrimEnd > audioDragState.fileDuration) {
+                newTrimEnd = audioDragState.fileDuration;
+            }
+            if (newTrimEnd <= audioDragState.initialTrimStart + 0.2) {
+                newTrimEnd = audioDragState.initialTrimStart + 0.2;
+            }
+            newClip.trimEnd = newTrimEnd;
+            newClip.duration = newTrimEnd - audioDragState.initialTrimStart;
+        }
+        return newClip;
+      }));
+    };
+
+    const handleMouseUp = () => setAudioDragState(null);
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [audioDragState, totalDuration]);
 
   // Fade Drag Logic
   useEffect(() => {
@@ -1464,7 +1828,7 @@ export default function VideoEditorPage() {
       const rect = tracksAreaRef.current.getBoundingClientRect();
       const trackWidth = rect.width - 80; 
       const deltaPx = e.clientX - fadeDragState.startX;
-      const deltaTime = (deltaPx / trackWidth) * (totalDuration || 1);
+      const deltaTime = (deltaPx / trackWidth) * fadeDragState.initialTotalDuration;
 
       setClips(prev => prev.map(c => {
         if (c.id !== fadeDragState.clipId) return c;
@@ -1489,14 +1853,14 @@ export default function VideoEditorPage() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [fadeDragState, totalDuration]);
+  }, [fadeDragState]);
   // Fabric.js Video Proxy for direct manipulation
   useEffect(() => {
     if (!fabricCanvasRef.current) return;
     
     let existingProxy = fabricCanvasRef.current.getObjects().find(o => (o as any).id === 'video-proxy');
     
-    if (!selectedClipId) {
+    if (selectedClipIds.length === 0) {
       if (existingProxy) {
         fabricCanvasRef.current.remove(existingProxy);
         fabricCanvasRef.current.renderAll();
@@ -1504,7 +1868,7 @@ export default function VideoEditorPage() {
       return;
     }
 
-    const clip = clips.find(c => c.id === selectedClipId);
+    const clip = clips.find(c => c.id === primarySelectedClipId);
     if (!clip) return;
 
     const canvasWidth = aspectRatio.w;
@@ -1562,7 +1926,7 @@ export default function VideoEditorPage() {
       const zoom = existingProxy.scaleX || 1;
       
       const updateFn = (prev: VideoClip[]) => prev.map(c => 
-        c.id === selectedClipId ? { ...c, x, y, videoZoom: zoom } : c
+        c.id === primarySelectedClipId ? { ...c, x, y, videoZoom: zoom } : c
       );
       
       if (useHistoryState) {
@@ -1589,13 +1953,13 @@ export default function VideoEditorPage() {
       if (!e.deselected) return;
       const deselectedProxy = e.deselected.find((o: any) => o.id === 'video-proxy');
       if (deselectedProxy) {
-        setSelectedClipId(null);
+        setSelectedClipIds([]);
       }
     };
     
     fabricCanvasRef.current.off('selection:cleared');
     fabricCanvasRef.current.on('selection:cleared', handleSelectionCleared);
-  }, [selectedClipId, clips, aspectRatio, setClips, historyState]);
+  }, [selectedClipIds, clips, aspectRatio, setClips, historyState]);
 
   // Direct Player Selection via Hit Testing and Text Tool Mode
   useEffect(() => {
@@ -1627,16 +1991,22 @@ export default function VideoEditorPage() {
         const bottom = cy + h / 2;
         
         if (pointer.x >= left && pointer.x <= right && pointer.y >= top && pointer.y <= bottom) {
-          setSelectedClipId(clip.id);
-          setSelectedAssetId(null);
           fabricCanvasRef.current?.discardActiveObject();
           fabricCanvasRef.current?.renderAll();
+          if (e.e.shiftKey || e.e.ctrlKey || e.e.metaKey) {
+             setSelectedClipIds(prev => prev.includes(clip.id) ? prev.filter(id => id !== clip.id) : [...prev, clip.id]);
+          } else {
+             if (!selectedClipIds.includes(clip.id)) {
+                 setSelectedClipIds([clip.id]);
+             }
+          }
+          setSelectedAssetId(null);
           return;
         }
       }
       
       // If no clip was hit, user clicked empty background.
-      setSelectedClipId(null);
+      setSelectedClipIds([]);
     };
 
     fabricCanvasRef.current.on('mouse:down', handleMouseDown);
@@ -1672,7 +2042,10 @@ export default function VideoEditorPage() {
 
   const handleAddTicker = () => {
     const newTrackId = `v${Date.now()}`;
-    setVideoTracks(prev => [...prev, { id: newTrackId, name: `T${prev.length + 1}` }]);
+    setVideoTracks(prev => {
+        const tCount = prev.filter(t => t.name.startsWith("T")).length;
+        return [...prev, { id: newTrackId, name: `T${tCount + 1}` }];
+    });
     
     const defaultText = "BREAKING NEWS: Type your scrolling text here...";
     const defaultFontSize = 32;
@@ -1716,7 +2089,17 @@ export default function VideoEditorPage() {
     };
 
     setClips(prev => [...prev, tickerClip]);
-    setSelectedClipId(tickerClip.id);
+    setSelectedClipIds([tickerClip.id]);
+
+    // Auto-scroll the timeline to the newly added track
+    setTimeout(() => {
+      if (tracksAreaRef.current?.parentElement) {
+        tracksAreaRef.current.parentElement.scrollTo({
+          top: tracksAreaRef.current.parentElement.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+    }, 100);
   };
 
   const handleAddSticker = (emoji: string) => {
@@ -1986,13 +2369,21 @@ export default function VideoEditorPage() {
         if (isImage) {
           addClip(5);
         } else {
-          const tmpUrl = URL.createObjectURL(file);
           const tmp = document.createElement("video");
-          tmp.src = tmpUrl;
+          tmp.src = persistentUrl;
           tmp.onloadedmetadata = () => {
+            if (clips.length === 0) {
+              const videoW = tmp.videoWidth || 1920;
+              const videoH = tmp.videoHeight || 1080;
+              adjustCanvasToVideoRatio(videoW / videoH);
+            }
             addClip(tmp.duration);
             tmp.remove();
-            URL.revokeObjectURL(tmpUrl);
+          };
+          tmp.onerror = () => {
+            console.error("Failed to load video metadata from", persistentUrl);
+            showToast(`Could not load video metadata for ${file.name}`, "error");
+            tmp.remove();
           };
         }
       } catch (err) {
@@ -2020,7 +2411,7 @@ export default function VideoEditorPage() {
       }
       return filtered;
     });
-    if (selectedClipId === id) setSelectedClipId(null);
+    if (primarySelectedClipId === id) setSelectedClipIds([]);
   };
 
   const handleAutoCaptions = async () => {
@@ -2098,6 +2489,50 @@ export default function VideoEditorPage() {
     }
   };
 
+  const handleFillCanvas = () => {
+    if (selectedClipIds.length === 0) return;
+    const clip = clips.find(c => c.id === primarySelectedClipId);
+    if (!clip || clip.type !== "video") return;
+
+    const videoEl = videoRefs.current[clip.id];
+    if (!videoEl) {
+      showToast("Video element not ready yet", "error");
+      return;
+    }
+
+    const videoW = videoEl.videoWidth || 1920;
+    const videoH = videoEl.videoHeight || 1080;
+    const canvasW = aspectRatio.w;
+    const canvasH = aspectRatio.h;
+
+    const rCanvas = canvasW / canvasH;
+    const rVideo = videoW / videoH;
+
+    let targetZoom = 1.0;
+    if (rVideo > rCanvas) {
+      targetZoom = rVideo / rCanvas;
+    } else {
+      targetZoom = rCanvas / rVideo;
+    }
+
+    updateSelectedClip({
+      videoZoom: parseFloat(targetZoom.toFixed(2)),
+      x: 0,
+      y: 0
+    });
+    showToast(`Canvas filled: Zoom set to ${Math.round(targetZoom * 100)}%`, "success");
+  };
+
+  const handleFitCanvas = () => {
+    if (selectedClipIds.length === 0) return;
+    updateSelectedClip({
+      videoZoom: 1.0,
+      x: 0,
+      y: 0
+    });
+    showToast("Reset clip fit to default (Contain)", "success");
+  };
+
   const handleRemoveBackground = async () => {
     if (!selectedAssetId || !fabricCanvasRef.current) {
       showToast("Please select an image asset on the canvas first.", "error");
@@ -2165,7 +2600,26 @@ export default function VideoEditorPage() {
 
   // Split current clip or selected asset at playhead
   const handleSplitClip = () => {
-    if (!selectedClipId && !selectedAssetId) return;
+    // Split Audio
+    if (selectedAudioClipId) {
+       const c = audioClips.find(x => x.id === selectedAudioClipId);
+       if (!c) return;
+       
+       if (globalTime <= c.startTime + 0.2 || globalTime >= c.startTime + c.duration - 0.2) {
+          showToast("Playhead must be inside the audio clip to split.", "error");
+          return;
+       }
+       const localSplit = globalTime - c.startTime + c.trimStart;
+       
+       const clipA: AudioClip = { ...c, id: `${c.id}-a`, trimEnd: localSplit, duration: localSplit - c.trimStart };
+       const clipB: AudioClip = { ...c, id: `${c.id}-b`, trimStart: localSplit, startTime: globalTime, duration: c.trimEnd - localSplit };
+       
+       setAudioClips(prev => [...prev.filter(x => x.id !== c.id), clipA, clipB]);
+       showToast("Audio clip split at playhead!", "success");
+       return;
+    }
+
+    if (selectedClipIds.length === 0 && !selectedAssetId) return;
     
     // Split Asset if selected
     if (selectedAssetId && fabricCanvasRef.current) {
@@ -2213,8 +2667,8 @@ export default function VideoEditorPage() {
   };
 
   const handleDuplicateClip = useCallback(() => {
-    if (!selectedClipId) return;
-    const c = clips.find(x => x.id === selectedClipId);
+    if (selectedClipIds.length === 0) return;
+    const c = clips.find(x => x.id === primarySelectedClipId);
     if (!c) return;
     
     const newStartTime = c.startTime + c.duration;
@@ -2225,35 +2679,57 @@ export default function VideoEditorPage() {
     };
     setClips(prev => [...prev, duplicated]);
     showToast("Clip duplicated!", "success");
-  }, [clips, selectedClipId, setClips]);
+  }, [clips, selectedClipIds, setClips]);
 
   const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     try {
-      showToast("Uploading audio...", "success");
-      const formData = new FormData();
-      formData.append("file", file);
+      showToast(files.length > 1 ? `Uploading ${files.length} audio files...` : "Uploading audio...", "success");
+      
+      const newClipsToAdd: AudioClip[] = [];
+      const newCustomAudios: any[] = [];
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const formData = new FormData();
+        formData.append("file", file);
 
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      const data = await res.json();
+        const res = await fetch("/api/upload", { method: "POST", body: formData });
+        const data = await res.json();
 
-      if (!data.success) {
-        showToast("Failed to upload audio", "error");
-        return;
+        if (!data.success) {
+          showToast(`Failed to upload ${file.name}`, "error");
+          continue;
+        }
+
+        const fileUrl = data.url;
+        const audioId = crypto.randomUUID();
+        newClipsToAdd.push({
+          id: audioId,
+          url: fileUrl,
+          startTime: globalTime,
+          duration: 0, // Set during onLoadedMetadata
+          trimStart: 0,
+          trimEnd: 0,
+          fileDuration: 0,
+          volume: 1,
+          name: file.name
+        });
+
+        newCustomAudios.push({ id: `audio-${Date.now()}-${i}`, url: fileUrl, name: file.name.replace(/\.[^/.]+$/, "") });
       }
 
-      const fileUrl = data.url;
-      setAudioUrl(fileUrl); // Set as current audio
-
-      const newAudio = { id: `audio-${Date.now()}`, url: fileUrl, name: file.name.replace(/\.[^/.]+$/, "") };
-      const newAudios = [newAudio, ...customAudios];
-      setCustomAudios(newAudios);
-      try { 
-        localStorage.setItem("custom_video_audios", JSON.stringify(newAudios)); 
-      } catch(err) {}
-      showToast("Audio added to library!", "success");
+      if (newClipsToAdd.length > 0) {
+        setAudioClips(prev => [...prev, ...newClipsToAdd]);
+        setCustomAudios(prev => {
+          const updated = [...newCustomAudios, ...prev];
+          try { localStorage.setItem("custom_video_audios", JSON.stringify(updated)); } catch(err) {}
+          return updated;
+        });
+        showToast(newClipsToAdd.length > 1 ? `${newClipsToAdd.length} audios added to library!` : "Audio added to library!", "success");
+      }
     } catch (err) {
       console.error(err);
       showToast("Error uploading audio", "error");
@@ -2341,7 +2817,7 @@ export default function VideoEditorPage() {
       clips,
       videoUrl,
       originalVideoUrl,
-      audioUrl,
+      audioClips,
       canvasJson,
     };
     const updated = [draft, ...drafts];
@@ -2356,7 +2832,7 @@ export default function VideoEditorPage() {
     setClips(draft.clips || []);
     if (draft.videoUrl !== undefined) setVideoUrl(draft.videoUrl);
     if (draft.originalVideoUrl !== undefined) setOriginalVideoUrl(draft.originalVideoUrl);
-    if (draft.audioUrl !== undefined) setAudioUrl(draft.audioUrl);
+    if (draft.audioClips !== undefined) setAudioClips(draft.audioClips);
     if (draft.canvasJson && fabricCanvasRef.current) {
       try {
         fabricCanvasRef.current.loadFromJSON(draft.canvasJson, () => {
@@ -2398,10 +2874,10 @@ export default function VideoEditorPage() {
     setClips([]);
     setVideoUrl(null);
     setOriginalVideoUrl(null);
-    setAudioUrl(null);
+    setAudioClips([]);
     setVideoTracks([{ id: "v1", name: "V1" }]);
     setGlobalTime(0);
-    setSelectedClipId(null);
+    setSelectedClipIds([]);
     setSelectedObj(null);
     if (fabricCanvasRef.current) {
       fabricCanvasRef.current.clear();
@@ -2417,7 +2893,17 @@ export default function VideoEditorPage() {
   const generateMockVoiceover = () => {
     showToast("Generating AI Voiceover...", "info");
     setTimeout(() => {
-      setAudioUrl("https://commondatastorage.googleapis.com/codeskulptor-assets/week7-brrring.m4a");
+      setAudioClips([{
+        id: crypto.randomUUID(),
+        url: "https://commondatastorage.googleapis.com/codeskulptor-assets/week7-brrring.m4a",
+        startTime: 0,
+        duration: 0,
+        trimStart: 0,
+        trimEnd: 0,
+        fileDuration: 0,
+        volume: 1,
+        name: "Demo Audio"
+      }]);
       showToast("Voiceover generated successfully!", "success");
     }, 1500);
   };
@@ -2455,7 +2941,8 @@ export default function VideoEditorPage() {
          previewOpacity = baseOpacity * ((clip.duration - localTime) / clip.fadeOutDuration);
       }
 
-      let animScale = 1;
+      let animScaleX = 1;
+      let animScaleY = 1;
       let animRotate = 0;
       let animX = 0;
       let animY = 0;
@@ -2466,7 +2953,7 @@ export default function VideoEditorPage() {
         
         switch(clip.animationType) {
           case "pulse":
-            animScale = 1 + Math.sin(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
+            animScaleX = animScaleY = 1 + Math.sin(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
             break;
           case "wiggle":
             animRotate = Math.sin(localTime * Math.PI * 2 * speed) * 15 * intensity;
@@ -2496,6 +2983,84 @@ export default function VideoEditorPage() {
           case "slide-in-top":
             if (localTime < 1 / speed) animY = -100 + (localTime * speed * 100);
             break;
+          case "zoom-in":
+            animScaleX = animScaleY = 1 + (localTime * speed * 0.1 * intensity);
+            break;
+          case "zoom-out":
+            animScaleX = animScaleY = Math.max(0, 1.2 - (localTime * speed * 0.1 * intensity));
+            break;
+          case "shake":
+            animX = (Math.sin(localTime * 20 * speed) + Math.sin(localTime * 35 * speed)) * 5 * intensity;
+            animY = (Math.cos(localTime * 25 * speed) + Math.sin(localTime * 40 * speed)) * 5 * intensity;
+            break;
+          case "ken-burns":
+            animScaleX = animScaleY = 1 + (localTime * speed * 0.05 * intensity);
+            animX = (localTime * speed * 5 * intensity);
+            animY = (localTime * speed * 2 * intensity);
+            break;
+          case "heartbeat":
+            const beat = (localTime * speed) % 1;
+            animScaleX = animScaleY = 1 + (beat < 0.2 ? Math.sin(beat * 5 * Math.PI) * 0.2 * intensity : (beat > 0.3 && beat < 0.5 ? Math.sin((beat - 0.3) * 5 * Math.PI) * 0.2 * intensity : 0));
+            break;
+          case "pop-in":
+            if (localTime < 1/speed) {
+               const t = localTime * speed;
+               animScaleX = animScaleY = 1 + Math.sin(t * Math.PI * 3) * Math.exp(-t * 5) * intensity;
+            }
+            break;
+          case '3d-flip-h': animScaleX = Math.cos(localTime * Math.PI * 2 * speed); break;
+          case '3d-flip-v': animScaleY = Math.cos(localTime * Math.PI * 2 * speed); break;
+          case '3d-wobble': 
+            animScaleX = 1 + Math.sin(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
+            animScaleY = 1 + Math.cos(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
+            break;
+          case 'pass-through-lr':
+            const ptDurLR = clip.duration || (clip.endTime - clip.startTime);
+            if (localTime < 1/speed) animX = -100 + (localTime * speed * 100);
+            else if (localTime > ptDurLR - 1/speed) animX = (localTime - (ptDurLR - 1/speed)) * speed * 100;
+            break;
+          case 'pass-through-rl':
+            const ptDurRL = clip.duration || (clip.endTime - clip.startTime);
+            if (localTime < 1/speed) animX = 100 - (localTime * speed * 100);
+            else if (localTime > ptDurRL - 1/speed) animX = -(localTime - (ptDurRL - 1/speed)) * speed * 100;
+            break;
+          case 'pass-through-tb':
+            const ptDurTB = clip.duration || (clip.endTime - clip.startTime);
+            if (localTime < 1/speed) animY = -100 + (localTime * speed * 100);
+            else if (localTime > ptDurTB - 1/speed) animY = (localTime - (ptDurTB - 1/speed)) * speed * 100;
+            break;
+          case 'pass-through-bt':
+            const ptDurBT = clip.duration || (clip.endTime - clip.startTime);
+            if (localTime < 1/speed) animY = 100 - (localTime * speed * 100);
+            else if (localTime > ptDurBT - 1/speed) animY = -(localTime - (ptDurBT - 1/speed)) * speed * 100;
+            break;
+          case 'pro-whip-pan':
+            animX = -100 * Math.exp(-localTime * speed * 12) * intensity;
+            break;
+          case 'pro-elastic':
+            const tEP = localTime * speed;
+            animScaleX = animScaleY = 1 - Math.exp(-tEP * 6) * Math.cos(tEP * 15) * intensity;
+            break;
+          case 'pro-push':
+            animScaleX = animScaleY = 1 + (localTime * speed * 0.02 * intensity);
+            break;
+          case 'pro-slider-left':
+            animX = -(localTime * speed * 2 * intensity);
+            break;
+          case 'pro-slider-right':
+            animX = (localTime * speed * 2 * intensity);
+            break;
+          case 'pro-glitch':
+            animX = (Math.random() - 0.5) * 10 * intensity;
+            animY = (Math.random() - 0.5) * 3 * intensity;
+            if (Math.random() > 0.8) animScaleX = 1 + (Math.random() - 0.5) * 0.1 * intensity;
+            break;
+          case 'pro-pan-up':
+            animY = -(localTime * speed * 1.5 * intensity);
+            break;
+          case 'pro-pan-down':
+            animY = (localTime * speed * 1.5 * intensity);
+            break;
         }
       }
 
@@ -2505,7 +3070,7 @@ export default function VideoEditorPage() {
 
         ctx.translate(w / 2, h / 2);
         ctx.translate((animX / 100) * w, (animY / 100) * h);
-        ctx.scale(animScale, animScale);
+        ctx.scale(animScaleX, animScaleY);
         ctx.rotate((animRotate * Math.PI) / 180);
         ctx.translate(-w / 2, -h / 2);
         
@@ -2577,8 +3142,68 @@ export default function VideoEditorPage() {
       const mediaEl = videoRefs.current[clip.id] as HTMLImageElement | HTMLVideoElement;
       if (!mediaEl) return;
 
+      let transitionAlphaMult = 1.0;
+      let transitionMaskPath: Path2D | null = null;
+      let isPixelize = false;
+
+      if (clip.transitionType && clip.transitionType !== "none" && clip.transitionDuration) {
+         const tProgress = localTime / clip.transitionDuration;
+         if (tProgress >= 0 && tProgress < 1) {
+            switch(clip.transitionType) {
+               case "fade":
+               case "dissolve":
+                 transitionAlphaMult = tProgress;
+                 break;
+               case "wipeleft":
+                 transitionMaskPath = new Path2D();
+                 transitionMaskPath.rect(w * (1 - tProgress), 0, w * tProgress, h);
+                 break;
+               case "wiperight":
+                 transitionMaskPath = new Path2D();
+                 transitionMaskPath.rect(0, 0, w * tProgress, h);
+                 break;
+               case "slideleft":
+                 animX += 100 * (1 - tProgress); 
+                 break;
+               case "slideright":
+                 animX -= 100 * (1 - tProgress); 
+                 break;
+               case "circlecrop":
+                 transitionMaskPath = new Path2D();
+                 const maxR = Math.hypot(w/2, h/2);
+                 transitionMaskPath.arc(w/2, h/2, maxR * tProgress, 0, Math.PI * 2);
+                 break;
+               case "pixelize":
+                 isPixelize = true;
+                 break;
+               case "flash-white":
+                 transitionAlphaMult = tProgress;
+                 // Flash brightness up very high at the beginning
+                 clip.brightness = (clip.brightness || 0) + (1 - tProgress) * 5;
+                 break;
+               case "zoom-in":
+                 transitionAlphaMult = tProgress;
+                 animScaleX *= 1 + (1 - tProgress) * 0.5;
+                 animScaleY *= 1 + (1 - tProgress) * 0.5;
+                 break;
+            }
+         }
+      }
+
       ctx.save();
+      if (transitionMaskPath) {
+        ctx.clip(transitionMaskPath);
+      }
+      previewOpacity *= transitionAlphaMult;
+
       ctx.filter = `brightness(${1 + clip.brightness}) contrast(${clip.contrast}) saturate(${clip.saturate}) sepia(${clip.sepia}) hue-rotate(${clip.hueRotate}deg)`;
+      if (isPixelize && clip.transitionDuration) {
+         const tProgress = localTime / clip.transitionDuration;
+         if (tProgress >= 0 && tProgress < 1) {
+             const blurAmt = Math.sin(tProgress * Math.PI) * 20;
+             ctx.filter += ` blur(${blurAmt}px)`;
+         }
+      }
       
       ctx.globalAlpha = previewOpacity;
       if (clip.opacity !== undefined && clip.opacity < 1) {
@@ -2587,7 +3212,7 @@ export default function VideoEditorPage() {
 
       ctx.translate(w / 2, h / 2);
       ctx.translate(((clip.x + animX) / 100) * w, ((clip.y + animY) / 100) * h);
-      ctx.scale(clip.videoZoom * animScale, clip.videoZoom * animScale);
+      ctx.scale(clip.videoZoom * animScaleX, clip.videoZoom * animScaleY);
       ctx.rotate((animRotate * Math.PI) / 180);
       ctx.translate(-w / 2, -h / 2);
 
@@ -2691,9 +3316,11 @@ export default function VideoEditorPage() {
 
       const ffScaleX = exportW / aspectRatio.w;
       const ffScaleY = exportH / aspectRatio.h;
-      const exportFps = 60; // 60fps for buttery smooth tickers and animations
+      // Use 60fps only for high quality. 30fps perfectly halves the CPU filter_complex workload.
+      const exportFps = exportQuality === "high" ? 60 : 30; 
 
       const assetOverlays: { name: string; start: number; end: number, animType: string, animSpeed: number, animIntensity: number, cx: number, cy: number, blob: Blob }[] = [];
+      const tickerAssets: { name: string; blob: Blob }[] = [];
       if (fabricCanvasRef.current && canvasAssets.length > 0) {
         fabricCanvasRef.current.discardActiveObject();
         
@@ -2702,13 +3329,32 @@ export default function VideoEditorPage() {
           const a = validAssets[i];
           const o = a.obj as any;
           
+          // Sanitize any NaN coordinates/scales to prevent corrupt images or layout crashes
+          if (isNaN(o.left) || typeof o.left !== 'number') o.left = (o._baseLeft !== undefined && !isNaN(o._baseLeft)) ? o._baseLeft : 0;
+          if (isNaN(o.top) || typeof o.top !== 'number') o.top = (o._baseTop !== undefined && !isNaN(o._baseTop)) ? o._baseTop : 0;
+          if (isNaN(o.scaleX) || typeof o.scaleX !== 'number') o.scaleX = (o._baseScaleX !== undefined && !isNaN(o._baseScaleX)) ? o._baseScaleX : 1;
+          if (isNaN(o.scaleY) || typeof o.scaleY !== 'number') o.scaleY = (o._baseScaleY !== undefined && !isNaN(o._baseScaleY)) ? o._baseScaleY : 1;
+          if (isNaN(o.width) || typeof o.width !== 'number' || o.width <= 0) o.width = 100;
+          if (isNaN(o.height) || typeof o.height !== 'number' || o.height <= 0) o.height = 100;
+          if (o.scaleX === 0) o.scaleX = 0.01;
+          if (o.scaleY === 0) o.scaleY = 0.01;
+          
           const currentScaleX = o.scaleX;
           const currentScaleY = o.scaleY;
           const currentAngle = o.angle;
           const currentOpacity = o.opacity;
-          
+          const currentLeft = o.left;
+          const currentTop = o.top;
+
           if (o._baseScaleX !== undefined) {
-             o.set({ scaleX: o._baseScaleX, scaleY: o._baseScaleY, angle: 0, opacity: 1 });
+             o.set({ 
+                scaleX: o._baseScaleX, 
+                scaleY: o._baseScaleY, 
+                angle: o._baseAngle !== undefined ? o._baseAngle : 0, 
+                left: o._baseLeft !== undefined ? o._baseLeft : o.left,
+                top: o._baseTop !== undefined ? o._baseTop : o.top,
+                opacity: 1 
+             });
              o.setCoords();
           } else {
              o.set({ angle: 0, opacity: 1 });
@@ -2716,10 +3362,34 @@ export default function VideoEditorPage() {
           }
           
           const center = o.getCenterPoint();
+          let cx = center.x * ffScaleX;
+          let cy = center.y * ffScaleY;
+
+          // Safe fallback to prevent NaN from crashing FFmpeg render
+          if (isNaN(cx)) {
+            const rawLeft = o._baseLeft !== undefined ? o._baseLeft : o.left;
+            cx = (typeof rawLeft === 'number' && !isNaN(rawLeft) ? rawLeft : (aspectRatio.w / 2)) * ffScaleX;
+          }
+          if (isNaN(cy)) {
+            const rawTop = o._baseTop !== undefined ? o._baseTop : o.top;
+            cy = (typeof rawTop === 'number' && !isNaN(rawTop) ? rawTop : (aspectRatio.h / 2)) * ffScaleY;
+          }
           
-          const dataUrl = o.toDataURL({ format: "png", multiplier: ffScaleX });
+          let dataUrl = "";
+          try {
+            dataUrl = o.toDataURL({ format: "png", multiplier: ffScaleX });
+          } catch (err) {
+            console.error("Failed to generate dataURL for object", err);
+          }
+
+          if (!dataUrl || !dataUrl.startsWith("data:image/") || dataUrl.length < 50) {
+            console.warn("Invalid dataURL, falling back to 1x1 transparent pixel.");
+            dataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+          }
+
+          const blob = dataUrlToBlob(dataUrl);
+
           const fname = `overlay_${i}.png`;
-          const blob = await fetch(dataUrl).then(r => r.blob());
           
           assetOverlays.push({ 
              name: fname, 
@@ -2728,12 +3398,19 @@ export default function VideoEditorPage() {
              animType: o.animationType || "none",
              animSpeed: o.animationSpeed || 1.0,
              animIntensity: o.animationIntensity || 1.0,
-             cx: center.x * ffScaleX,
-             cy: center.y * ffScaleY,
+             cx,
+             cy,
              blob
           });
           
-          o.set({ scaleX: currentScaleX, scaleY: currentScaleY, angle: currentAngle, opacity: currentOpacity });
+          o.set({ 
+             scaleX: currentScaleX, 
+             scaleY: currentScaleY, 
+             angle: currentAngle, 
+             opacity: currentOpacity,
+             left: currentLeft,
+             top: currentTop
+          });
           o.setCoords();
         }
         fabricCanvasRef.current.renderAll();
@@ -2813,12 +3490,51 @@ export default function VideoEditorPage() {
           opacityFilter = `,format=rgba,colorchannelmixer=aa=${c.opacity}`;
         }
 
-        // Force input clip to CFR to sync perfectly with canvas and avoid jitter
-        const clipFilter = `[${inputIdx}:v]fps=fps=${exportFps},trim=start=${tStart}:end=${tEnd},${setptsFilter},${scaleFilter},${colorFilter}${fadeFilters}${opacityFilter}[v${i}]`;
-        
         // Handle Picture-in-Picture positioning (X,Y offsets based on width/height percentages)
-        const overlayX = `(W-w)/2 + W*(${c.x}/100)`;
-        const overlayY = `(H-h)/2 + H*(${c.y}/100)`;
+        let overlayX = `(W-w)/2 + W*(${c.x}/100)`;
+        let overlayY = `(H-h)/2 + H*(${c.y}/100)`;
+        let transitionFilter = "";
+
+        if (c.transitionType && c.transitionType !== "none" && c.transitionDuration) {
+           const tStart = c.startTime;
+           const tEnd = c.startTime + c.transitionDuration;
+           const tDur = c.transitionDuration;
+           
+           switch(c.transitionType) {
+              case "fade":
+              case "dissolve":
+                 transitionFilter = `,format=rgba,colorchannelmixer=aa='if(lt(t,${tEnd}), (t-${tStart})/${tDur}, 1)'`;
+                 break;
+              case "wipeleft":
+                 transitionFilter = `,crop=w='if(lt(t,${tEnd}), max(1, iw*(t-${tStart})/${tDur}), iw)':h=ih:x='if(lt(t,${tEnd}), iw*(1-(t-${tStart})/${tDur}), 0)':y=0`;
+                 break;
+              case "wiperight":
+                 transitionFilter = `,crop=w='if(lt(t,${tEnd}), max(1, iw*(t-${tStart})/${tDur}), iw)':h=ih:x=0:y=0`;
+                 break;
+              case "slideleft":
+                 overlayX = `if(lt(t,${tEnd}), W*(1-(t-${tStart})/${tDur}) + (W-w)/2 + W*(${c.x}/100), (W-w)/2 + W*(${c.x}/100))`;
+                 break;
+              case "slideright":
+                 overlayX = `if(lt(t,${tEnd}), -W*(1-(t-${tStart})/${tDur}) + (W-w)/2 + W*(${c.x}/100), (W-w)/2 + W*(${c.x}/100))`;
+                 break;
+              case "circlecrop":
+              case "pixelize":
+                 // Fallback to crossfade for complex ones that require expensive geq filters
+                 transitionFilter = `,format=rgba,colorchannelmixer=aa='if(lt(t,${tEnd}), (t-${tStart})/${tDur}, 1)'`;
+                 break;
+              case "flash-white":
+                 // Extreme brightness at start decaying to 0
+                 transitionFilter = `,format=rgba,eq=brightness='if(lt(t,${tEnd}), 1-((t-${tStart})/${tDur}), 0)',colorchannelmixer=aa='if(lt(t,${tEnd}), (t-${tStart})/${tDur}, 1)'`;
+                 break;
+              case "zoom-in":
+                 // Scale from 1.5 down to 1.0
+                 transitionFilter = `,format=rgba,scale=w='iw*(1+0.5*(1-(t-${tStart})/${tDur}))':h='ih*(1+0.5*(1-(t-${tStart})/${tDur}))',colorchannelmixer=aa='if(lt(t,${tEnd}), (t-${tStart})/${tDur}, 1)'`;
+                 break;
+           }
+        }
+
+        // Force input clip to CFR to sync perfectly with canvas and avoid jitter
+        const clipFilter = `[${inputIdx}:v]fps=fps=${exportFps},trim=start=${tStart}:end=${tEnd},${setptsFilter},${scaleFilter},${colorFilter}${fadeFilters}${opacityFilter}${transitionFilter}[v${i}]`;
 
         finalFilter += `;${clipFilter};${lastOut}[v${i}]overlay=${overlayX}:${overlayY}:enable='between(t,${c.startTime},${c.startTime + c.duration})'${nextOut}`;
         lastOut = nextOut;
@@ -2849,7 +3565,7 @@ export default function VideoEditorPage() {
               assetFilter += `,rotate=a='-${T}*2*PI*${a.animSpeed}':ow='hypot(iw,ih)':oh='hypot(iw,ih)':c=none`;
               break;
             case "blink":
-              assetFilter += `,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='a(X,Y)*if(eq(mod(floor(${T}*4*${a.animSpeed}),2),0),max(0,1-0.5*${a.animIntensity}),1)'`;
+              assetFilter += `,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*if(eq(mod(floor((T-${a.start})*4*${a.animSpeed}),2),0),max(0,1-0.5*${a.animIntensity}),1)'`;
               break;
             case "slide-in-left":
               ox = `${a.cx} - w/2 + w * min(0, -1 + ${T}*${a.animSpeed})`;
@@ -2871,7 +3587,9 @@ export default function VideoEditorPage() {
         }
       }
 
-      // Native drawtext+drawbox ticker — no PNG files, no overlay timing jitter
+      let currentInputIdx = validVideoClips.length + assetOverlays.length;
+
+      // Canvas-rendered ticker — captures emojis and special symbols perfectly
       if (tickers.length > 0) {
         // Canvas for measuring text width at export scale
         const measureCanvas = document.createElement('canvas');
@@ -2881,57 +3599,108 @@ export default function VideoEditorPage() {
           const tck = tickers[i];
           const fontSize1px = Math.round((tck.tickerFontSize || 32) * ffScaleY);
           const lines1 = (tck.tickerText || 'TICKER').split('\n');
-          const h1Px = lines1.length * fontSize1px * 1.2;
+          // Tickers render horizontally on a single line, do not multiply height by line breaks
+          const h1Px = fontSize1px * 1.2;
 
           const fontSize2px = Math.round((tck.tickerFontSize2 || 24) * ffScaleY);
           const lines2 = tck.enableSecondaryTicker ? (tck.tickerText2 || '').split('\n') : [];
-          const h2Px = tck.enableSecondaryTicker ? lines2.length * fontSize2px * 1.2 : 0;
+          const h2Px = tck.enableSecondaryTicker ? fontSize2px * 1.2 : 0;
 
           const paddingPx = Math.max(fontSize1px, tck.enableSecondaryTicker ? fontSize2px : 0) * 0.8;
           const totalH = Math.round(h1Px + h2Px + paddingPx);
           const yPx = Math.round(((tck.y !== undefined ? tck.y : 90) / 100) * exportH);
-          const enableExpr = `between(t,${tck.startTime},${tck.startTime + tck.duration})`;
+          // 1. Measure text width first to determine true active duration if not looping
+          const text1Raw = lines1.join(' | ');
+          measureCtx.font = `bold ${fontSize1px}px ${tck.tickerFontFamily || 'Arial'}`;
+          const textW1 = Math.ceil(measureCtx.measureText(text1Raw).width) + 400;
+          const loopW1 = exportW + textW1; 
+          
+          let text2Raw = "";
+          let loopW2 = 0;
+          if (tck.enableSecondaryTicker) {
+            text2Raw = lines2.join(' | ');
+            measureCtx.font = `bold ${fontSize2px}px ${tck.tickerFontFamily2 || 'Arial'}`;
+            const textW2 = Math.ceil(measureCtx.measureText(text2Raw).width) + 400;
+            loopW2 = exportW + textW2;
+          }
+
+          let maxVisibleTime = tck.duration;
+          const isLooping = tck.tickerLoop ?? true;
+          if (!isLooping) {
+             const timeToClear1 = loopW1 / (tck.tickerSpeed || 150);
+             const timeToClear2 = tck.enableSecondaryTicker ? loopW2 / (tck.tickerSpeed2 || 100) : 0;
+             maxVisibleTime = Math.min(tck.duration, Math.max(timeToClear1, timeToClear2));
+          }
+
+          const enableExpr = `between(t,${tck.startTime},${tck.startTime + maxVisibleTime})`;
           const { hex: bgHex, alpha: bgAlpha } = toFfmpegColor(tck.tickerBgColor || '#cc0000');
 
-          // 1. Draw background bar
+          // 2. Draw background bar
           finalFilter += `;[${lastOut.slice(1,-1)}]drawbox=y=${yPx}:x=0:w=iw:h=${totalH}:color=${bgHex}@${bgAlpha}:t=fill:enable='${enableExpr}'[vtck_bg${i}]`;
           lastOut = `[vtck_bg${i}]`;
 
-          // 2. Measure primary text width with canvas, use as fixed number in expression
-          const text1Raw = lines1.join(' | ');
+          // 3. Render primary text to Canvas
+          measureCtx.clearRect(0, 0, measureCanvas.width, measureCanvas.height);
           measureCtx.font = `bold ${fontSize1px}px ${tck.tickerFontFamily || 'Arial'}`;
-          const textW1 = Math.ceil(measureCtx.measureText(text1Raw).width) + 50;
-          const loopW1 = exportW + textW1; // total scroll loop distance in pixels
 
-          const text1 = escapeDrawtext(text1Raw);
+          // Give canvas generous height to prevent Devanagari/Nepali ascenders/descenders from clipping
+          const canvasH1 = Math.ceil(fontSize1px * 2.5);
+          measureCanvas.width = textW1;
+          measureCanvas.height = canvasH1;
+          measureCtx.clearRect(0, 0, textW1, measureCanvas.height);
+          measureCtx.font = `bold ${fontSize1px}px ${tck.tickerFontFamily || 'Arial'}`;
+          measureCtx.textBaseline = 'middle';
+          measureCtx.fillStyle = tck.tickerTextColor || '#ffffff';
+          measureCtx.fillText(text1Raw, 0, canvasH1 / 2);
+
+          const t1Blob = dataUrlToBlob(measureCanvas.toDataURL("image/png"));
+          tickerAssets.push({ name: `tck1_${i}.png`, blob: t1Blob });
+          const t1Input = `[${currentInputIdx}:v]`;
+          currentInputIdx++;
+
           const speed1 = Math.round((tck.tickerSpeed || 150) * ffScaleX);
-          const { hex: color1 } = toFfmpegColor(tck.tickerTextColor || '#ffffff');
-          const y1Px = tck.enableSecondaryTicker
-            ? yPx + Math.round(paddingPx / 4 + fontSize1px * 0.75)
-            : yPx + Math.round(totalH / 2 - fontSize1px * 0.2);
+          // Calculate vertical center visually, then subtract half canvas height to place the overlay perfectly
+          const visualCenter1 = tck.enableSecondaryTicker
+            ? yPx + Math.round(paddingPx / 4 + h1Px / 2)
+            : yPx + Math.round(totalH / 2);
+          const y1Px = Math.round(visualCenter1 - canvasH1 / 2);
 
           const startFrame = Math.round(tck.startTime * exportFps);
           const speedPerFrame1 = speed1 / exportFps;
 
           // Single-quoted x expression using frame-based variable 'n' for mathematical precision and zero timing jitter.
-          finalFilter += `;[${lastOut.slice(1,-1)}]drawtext=text='${text1}':fontsize=${fontSize1px}:fontcolor=${color1}:x='trunc(w-mod((n-${startFrame})*${speedPerFrame1},${loopW1}))':y=${y1Px}:enable='${enableExpr}'[vtck_t1_${i}]`;
+          finalFilter += `;${t1Input}format=rgba,setpts=PTS-STARTPTS[prep_tck1_${i}];[${lastOut.slice(1,-1)}][prep_tck1_${i}]overlay=x='trunc(W-mod((n-${startFrame})*${speedPerFrame1},${loopW1}))':y=${y1Px}:enable='${enableExpr}'[vtck_t1_${i}]`;
           lastOut = `[vtck_t1_${i}]`;
 
           // 3. Secondary text (if enabled)
           if (tck.enableSecondaryTicker && lines2.length > 0) {
             const text2Raw = lines2.join(' | ');
             measureCtx.font = `bold ${fontSize2px}px ${tck.tickerFontFamily2 || 'Arial'}`;
-            const textW2 = Math.ceil(measureCtx.measureText(text2Raw).width) + 50;
+            // Emojis often render wider than measureText predicts. Adding 400px safety buffer to prevent cutoff.
+            const textW2 = Math.ceil(measureCtx.measureText(text2Raw).width) + 400;
             const loopW2 = exportW + textW2;
 
-            const text2 = escapeDrawtext(text2Raw);
+            // Give canvas generous height to prevent Devanagari/Nepali ascenders/descenders from clipping
+            const canvasH2 = Math.ceil(fontSize2px * 2.5);
+            measureCanvas.width = textW2;
+            measureCanvas.height = canvasH2;
+            measureCtx.clearRect(0, 0, textW2, measureCanvas.height);
+            measureCtx.font = `bold ${fontSize2px}px ${tck.tickerFontFamily2 || 'Arial'}`;
+            measureCtx.textBaseline = 'middle';
+            measureCtx.fillStyle = tck.tickerTextColor2 || '#ffffff';
+            measureCtx.fillText(text2Raw, 0, canvasH2 / 2);
+
+            const t2Blob = dataUrlToBlob(measureCanvas.toDataURL("image/png"));
+            tickerAssets.push({ name: `tck2_${i}.png`, blob: t2Blob });
+            const t2Input = `[${currentInputIdx}:v]`;
+            currentInputIdx++;
+
             const speed2 = Math.round((tck.tickerSpeed2 || 100) * ffScaleX);
             const speedPerFrame2 = speed2 / exportFps;
-            const { hex: color2 } = toFfmpegColor(tck.tickerTextColor2 || '#ffffff');
-            const y2Px = yPx + Math.round(paddingPx / 4 + h1Px + fontSize2px * 0.75);
+            const visualCenter2 = yPx + Math.round(paddingPx / 4 + h1Px + h2Px / 2);
+            const y2Px = Math.round(visualCenter2 - canvasH2 / 2);
 
-            // Single-quoted x expression using frame-based variable 'n' for mathematical precision and zero timing jitter.
-            finalFilter += `;[${lastOut.slice(1,-1)}]drawtext=text='${text2}':fontsize=${fontSize2px}:fontcolor=${color2}:x='trunc(w-mod((n-${startFrame})*${speedPerFrame2},${loopW2}))':y=${y2Px}:enable='${enableExpr}'[vtck_t2_${i}]`;
+            finalFilter += `;${t2Input}format=rgba,setpts=PTS-STARTPTS[prep_tck2_${i}];[${lastOut.slice(1,-1)}][prep_tck2_${i}]overlay=x='trunc(W-mod((n-${startFrame})*${speedPerFrame2},${loopW2}))':y=${y2Px}:enable='${enableExpr}'[vtck_t2_${i}]`;
             lastOut = `[vtck_t2_${i}]`;
           }
         }
@@ -2941,23 +3710,66 @@ export default function VideoEditorPage() {
 
       const mapArgs = ["-map", "[vout]"];
       const inputArgs: string[] = [];
-      validVideoClips.forEach((_, i) => inputArgs.push("-i", `clip${i}.mp4`));
+      validVideoClips.forEach((clip, i) => {
+        const isImg = clip.type === "image";
+        const ext = isImg ? "png" : "mp4";
+        if (isImg) {
+          inputArgs.push("-loop", "1", "-framerate", exportFps.toString(), "-i", `clip${i}.${ext}`);
+        } else {
+          inputArgs.push("-i", `clip${i}.${ext}`);
+        }
+      });
       assetOverlays.forEach((a) => inputArgs.push("-loop", "1", "-framerate", exportFps.toString(), "-i", a.name));
-      // Tickers now use native drawtext — no PNG inputs needed
+      tickerAssets.forEach((a) => inputArgs.push("-loop", "1", "-framerate", exportFps.toString(), "-i", a.name));
       
-      if (audioUrl) { inputArgs.push("-i", "audio.mp3"); }
+      let hasCustomAudioMap = false;
+      if (audioClips.length > 0) {
+          const aIdxStart = validVideoClips.length + assetOverlays.length + tickerAssets.length;
+          const aoutLabels: string[] = [];
+          
+          audioClips.forEach((audio, i) => {
+              inputArgs.push("-i", `audio${i}.mp3`);
+              
+              let exportTrimStart = audio.trimStart;
+              let exportDelay = audio.startTime;
+              
+              // If audio starts before 0, convert the negative delay into a larger trim offset
+              if (exportDelay < 0) {
+                  exportTrimStart += Math.abs(exportDelay);
+                  exportDelay = 0;
+              }
+              
+              const delayMs = Math.round(exportDelay * 1000);
+              const label = `[aud${i}]`;
+              const exportVol = audio.isMuted ? 0 : (audio.volume || 1);
+              finalFilter += `;[${aIdxStart + i}:a]atrim=start=${exportTrimStart}:end=${audio.trimStart + audio.duration},asetpts=PTS-STARTPTS,adelay=${delayMs}|${delayMs},volume=${exportVol}${label}`;
+              aoutLabels.push(label);
+          });
+          
+          if (aoutLabels.length > 1) {
+              finalFilter += `;${aoutLabels.join('')}amix=inputs=${aoutLabels.length}:duration=first:dropout_transition=2[aout]`;
+          } else {
+              finalFilter += `;${aoutLabels[0]}copy[aout]`; // Actually copy doesn't work for audio filters like this. Just rename the pad
+              // Or better, just don't use amix if length is 1
+              finalFilter = finalFilter.replace(aoutLabels[0], '[aout]');
+          }
+          
+          mapArgs.push("-map", "[aout]");
+          hasCustomAudioMap = true;
+      }
 
       const manifest = {
         inputArgs,
         filter_complex: finalFilter,
         mapArgs,
         totalDuration: totalDuration.toString(),
-        audioUrl: !!audioUrl,
+        audioClipsCount: audioClips.length,
+        hasCustomAudioMap,
         fps: exportFps,
         crf: crfVal,
         validVideoClipsCount: validVideoClips.length,
         assetOverlaysCount: assetOverlays.length,
-        tickerAssetsCount: 0  // Tickers use inline drawtext — no PNG files
+        tickerAssetsCount: tickerAssets.length
       };
 
       const formData = new FormData();
@@ -2965,24 +3777,31 @@ export default function VideoEditorPage() {
 
       // Append video clips
       for (let i = 0; i < validVideoClips.length; i++) {
-        const fileBlob = await fetch(validVideoClips[i].url).then(r => r.blob());
-        formData.append("files", fileBlob, `clip${i}.mp4`);
+        const clip = validVideoClips[i];
+        const isImg = clip.type === "image";
+        const ext = isImg ? "png" : "mp4";
+        const fileBlob = await fetch(clip.url).then(r => r.blob());
+        formData.append("files", fileBlob, `clip${i}.${ext}`);
       }
       
       // Append generated overlays
       for (let i = 0; i < assetOverlays.length; i++) {
         formData.append("files", assetOverlays[i].blob, assetOverlays[i].name);
       }
-      // Note: Tickers use native drawtext — no PNG files to append
       
-      // Append audio
-      if (audioUrl) {
-        const audioBlob = await fetch(audioUrl).then(r => r.blob());
-        formData.append("files", audioBlob, "audio.mp3");
+      // Append ticker overlays
+      for (let i = 0; i < tickerAssets.length; i++) {
+        formData.append("files", tickerAssets[i].blob, tickerAssets[i].name);
+      }
+      
+      // Append audio clips
+      for (let i = 0; i < audioClips.length; i++) {
+        const audioBlob = await fetch(audioClips[i].url).then(r => r.blob());
+        formData.append("files", audioBlob, `audio${i}.mp3`);
       }
 
       const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
-      const renderRes = await fetch(`${backendUrl}/video-editor/render`, {
+      const renderRes = await fetch(`${backendUrl}/video-editor/render/start`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData
@@ -2994,7 +3813,47 @@ export default function VideoEditorPage() {
         throw new Error("Backend rendering failed.");
       }
 
-      const fileData = await renderRes.blob();
+      const { job_id } = await renderRes.json();
+      
+      // Poll for progress
+      let renderCompleted = false;
+      while (!renderCompleted) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const statusRes = await fetch(`${backendUrl}/video-editor/render/status/${job_id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (!statusRes.ok) {
+          throw new Error("Failed to check render status.");
+        }
+        
+        const statusData = await statusRes.json();
+        
+        if (statusData.status === "failed") {
+          throw new Error(`Render failed: ${statusData.error}`);
+        }
+        
+        if (typeof statusData.progress === 'number') {
+           setProgress(statusData.progress);
+        }
+        
+        if (statusData.status === "completed") {
+          renderCompleted = true;
+          setProgress(100);
+        }
+      }
+
+      // Download the final video
+      const downloadRes = await fetch(`${backendUrl}/video-editor/render/download/${job_id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!downloadRes.ok) {
+         throw new Error("Failed to download rendered video.");
+      }
+
+      const fileData = await downloadRes.blob();
       console.log("Render response blob size:", fileData.size, "type:", fileData.type);
       
       if (fileData.size === 0) {
@@ -3045,8 +3904,8 @@ export default function VideoEditorPage() {
           if (active && !(active as any).isEditing) {
             if ((active as any).id === 'video-proxy') {
               // The proxy is selected, meaning a video clip is active
-              if (selectedClipId) {
-                deleteClip(selectedClipId);
+              if (primarySelectedClipId) {
+                deleteClip(primarySelectedClipId);
                 deleted = true;
               }
             } else {
@@ -3058,8 +3917,14 @@ export default function VideoEditorPage() {
             }
           }
         }
-        if (!deleted && selectedClipId) {
-          deleteClip(selectedClipId);
+        if (!deleted && primarySelectedClipId) {
+          deleteClip(primarySelectedClipId);
+          deleted = true;
+        }
+        if (!deleted && selectedAudioClipId) {
+          setAudioClips(prev => prev.filter(c => c.id !== selectedAudioClipId));
+          setSelectedAudioClipId(null);
+          showToast("Audio track deleted", "success");
         }
       }
 
@@ -3101,6 +3966,12 @@ export default function VideoEditorPage() {
         handleDuplicateClip();
       }
 
+      // Ctrl+A / Cmd+A = Select All Clips
+      if ((e.ctrlKey || e.metaKey) && e.code === "KeyA") {
+        e.preventDefault();
+        setSelectedClipIds(clips.map(c => c.id));
+      }
+
       // I = Mark In (Set Trim Start)
       if (e.code === "KeyI" && selectedClip) {
         e.preventDefault();
@@ -3130,7 +4001,7 @@ export default function VideoEditorPage() {
       return;
     }
     setHasUnsavedChanges(true);
-  }, [clips, canvasAssets, videoTracks, audioUrl]);
+  }, [clips, canvasAssets, videoTracks, audioClips]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -3817,8 +4688,8 @@ export default function VideoEditorPage() {
         
         {/* LEFT SIDEBAR - TOOLS */}
         <div className="w-14 sm:w-16 bg-zinc-900 border-r border-zinc-800 flex flex-col items-center py-2 gap-1 overflow-y-auto shrink-0 z-10 custom-scrollbar">
-          <input type="file" ref={fileInputRef} onChange={handleVideoUpload} accept="video/mp4,video/webm,image/png,image/jpeg,image/webp" className="hidden" multiple />
-          <input type="file" ref={audioInputRef} onChange={handleAudioUpload} accept="audio/*" className="hidden" />
+          <input type="file" ref={fileInputRef} onChange={handleVideoUpload} accept="video/mp4,video/webm,video/quicktime,.mov,image/png,image/jpeg,image/webp" className="hidden" multiple />
+          <input type="file" multiple ref={audioInputRef} onChange={handleAudioUpload} accept="audio/*" className="hidden" />
           
           {/* Selection Tool */}
           <button onClick={() => setLeftPanel(null)} className={`p-2 rounded-lg transition-all flex flex-col items-center gap-1 group ${!leftPanel ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-400 hover:text-white hover:bg-zinc-800"}`} title="Selection Tool (V)">
@@ -3927,7 +4798,7 @@ export default function VideoEditorPage() {
                 {mediaTab === "library" && (
                   <div className="flex flex-col h-full overflow-hidden">
                     <div className="px-4 pt-3 pb-3 border-b border-zinc-800 shrink-0">
-                      <input ref={mediaLibInputRef} type="file" accept="video/*" multiple className="hidden" onChange={e => handleMediaLibraryUpload(e.target.files)} />
+                      <input ref={mediaLibInputRef} type="file" accept="video/*,video/quicktime,.mov,image/*" multiple className="hidden" onChange={e => handleMediaLibraryUpload(e.target.files)} />
                       <div
                         className="border-2 border-dashed border-zinc-700 hover:border-indigo-500 rounded-xl p-3 text-center cursor-pointer transition-colors group"
                         onClick={() => mediaLibInputRef.current?.click()}
@@ -3965,7 +4836,8 @@ export default function VideoEditorPage() {
                                     fileDuration: item.duration,
                                     duration: item.duration,
                                     trimStart: 0,
-                                    trimEnd: item.duration
+                                    trimEnd: item.duration,
+                                    type: item.type
                                   } 
                                 }));
                                 e.dataTransfer.effectAllowed = "copy";
@@ -4006,13 +4878,20 @@ export default function VideoEditorPage() {
                     <div className="space-y-2 pb-3 border-b border-zinc-800">
                       <button 
                         onClick={() => {
-                          const sourceUrl = originalVideoUrl || videoUrl;
-                          if (!sourceUrl) return showToast("No main video attached", "error");
-                          const newClip = { id: crypto.randomUUID(), name: "Main Video", url: sourceUrl };
+                          const firstVideo = clips.find(c => c.type === "video" || !c.type);
+                          const sourceUrl = originalVideoUrl || videoUrl || firstVideo?.url;
+                          if (!sourceUrl) return showToast("No video available to save", "error");
+                          const sourceName = (originalVideoUrl || videoUrl) ? "Main Video" : (firstVideo?.name || "Main Video");
+                          
+                          if (customClips.some(c => c.name === sourceName)) {
+                            return showToast(`A video named "${sourceName}" is already saved`, "info");
+                          }
+
+                          const newClip = { id: crypto.randomUUID(), name: sourceName, url: sourceUrl };
                           const updated = [...customClips, newClip];
                           setCustomClips(updated);
                           localStorage.setItem("custom_video_clips", JSON.stringify(updated));
-                          showToast("Saved main video to clips", "success");
+                          showToast(`Saved ${sourceName.toLowerCase()} to clips`, "success");
                         }} 
                         className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium rounded transition-colors flex items-center justify-center gap-1"
                       >
@@ -4020,10 +4899,16 @@ export default function VideoEditorPage() {
                       </button>
                       <button 
                         onClick={() => {
-                          if (!selectedClipId) return showToast("Select a clip on the timeline first", "error");
-                          const clip = clips.find(c => c.id === selectedClipId);
+                          if (selectedClipIds.length === 0) return showToast("Select a clip on the timeline first", "error");
+                          const clip = clips.find(c => c.id === primarySelectedClipId);
                           if (!clip) return;
-                          const newClip = { id: crypto.randomUUID(), name: "Trimmed Clip", url: clip.url, trimStart: clip.trimStart, trimEnd: clip.trimEnd };
+                          
+                          const clipName = clip.name || "Trimmed Clip";
+                          if (customClips.some(c => c.name === clipName)) {
+                            return showToast(`A clip named "${clipName}" is already saved`, "info");
+                          }
+
+                          const newClip = { id: crypto.randomUUID(), name: clipName, url: clip.url, trimStart: clip.trimStart, trimEnd: clip.trimEnd };
                           const updated = [...customClips, newClip];
                           setCustomClips(updated);
                           localStorage.setItem("custom_video_clips", JSON.stringify(updated));
@@ -4092,7 +4977,7 @@ export default function VideoEditorPage() {
                                 <p className="text-[9px] text-zinc-500 truncate">{clip.trimStart !== undefined ? `Trimmed (${clip.trimStart}s - ${clip.trimEnd}s)` : 'Full Video'}</p>
                               </div>
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => { const duration = clip.trimEnd ? clip.trimEnd - (clip.trimStart || 0) : 5; const newClipObj: VideoClip = { id: crypto.randomUUID(), type: "video", name: clip.name || "Custom Clip", url: clip.url, startTime: globalTime, fileDuration: clip.trimEnd || 5, duration, trimStart: clip.trimStart || 0, trimEnd: clip.trimEnd || 5, trackId: videoTracks[0]?.id || "v1", color: `hsl(${Math.floor(Math.random()*360)}, 70%, 55%)`, x: 0, y: 0, videoZoom: 1, brightness: 0, contrast: 1, saturate: 1, sepia: 0, hueRotate: 0, enableChromaKey: false, chromaKeyColor: "#00ff00", chromaKeySimilarity: 0.3, playbackRate: 1, volume: 1, opacity: 1 }; setClips(prev => [...prev, newClipObj]); setSelectedClipId(newClipObj.id); showToast("Clip added to timeline", "success"); }} className="w-6 h-6 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-400 hover:text-white rounded flex items-center justify-center transition-colors" title="Add to Timeline"><Plus className="w-3 h-3" /></button>
+                                <button onClick={() => { const duration = clip.trimEnd ? clip.trimEnd - (clip.trimStart || 0) : 5; const newClipObj: VideoClip = { id: crypto.randomUUID(), type: "video", name: clip.name || "Custom Clip", url: clip.url, startTime: globalTime, fileDuration: clip.trimEnd || 5, duration, trimStart: clip.trimStart || 0, trimEnd: clip.trimEnd || 5, trackId: videoTracks[0]?.id || "v1", color: `hsl(${Math.floor(Math.random()*360)}, 70%, 55%)`, x: 0, y: 0, videoZoom: 1, brightness: 0, contrast: 1, saturate: 1, sepia: 0, hueRotate: 0, enableChromaKey: false, chromaKeyColor: "#00ff00", chromaKeySimilarity: 0.3, playbackRate: 1, volume: 1, opacity: 1 }; setClips(prev => [...prev, newClipObj]); setSelectedClipIds([newClipObj.id]); showToast("Clip added to timeline", "success"); }} className="w-6 h-6 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-400 hover:text-white rounded flex items-center justify-center transition-colors" title="Add to Timeline"><Plus className="w-3 h-3" /></button>
                                 <button onClick={e => handleEditClipDetails(e, clip.id)} className="w-6 h-6 bg-indigo-500/20 hover:bg-indigo-500 text-indigo-400 hover:text-white rounded flex items-center justify-center transition-colors" title="Edit Details"><PenTool className="w-3 h-3" /></button>
                                 <button onClick={() => { const updated = customClips.filter(c => c.id !== clip.id); setCustomClips(updated); localStorage.setItem("custom_video_clips", JSON.stringify(updated)); }} className="w-6 h-6 bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white rounded flex items-center justify-center transition-colors" title="Delete"><X className="w-3 h-3" /></button>
                               </div>
@@ -4113,11 +4998,10 @@ export default function VideoEditorPage() {
                         <Plus className="w-3 h-3" /> Upload
                       </button>
                     </div>
-                    {audioUrl ? (
+                    {audioClips.length > 0 ? (
                       <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-3 shrink-0">
-                        <p className="text-xs text-emerald-400 font-medium mb-2">✓ Active Audio</p>
-                        <audio src={audioUrl} controls className="w-full h-8" />
-                        <button onClick={() => setAudioUrl(null)} className="mt-2 text-xs text-zinc-500 hover:text-red-400 transition-colors">Remove audio</button>
+                        <p className="text-xs text-emerald-400 font-medium mb-2">✓ Active Audio Tracks: {audioClips.length}</p>
+                        <button onClick={() => setAudioClips([])} className="mt-2 text-xs text-zinc-500 hover:text-red-400 transition-colors">Clear all audio</button>
                       </div>
                     ) : null}
                     <div className="space-y-3 flex-1 overflow-hidden flex flex-col">
@@ -4154,13 +5038,29 @@ export default function VideoEditorPage() {
                                     <p className="text-xs font-medium text-zinc-300 truncate">{audio.name || "Untitled Audio"}</p>
                                     <p className="text-[9px] text-zinc-500 truncate">{audio.artist ? `by ${audio.artist}` : 'Preview or add to track'}</p>
                                   </div>
-                                  <button onClick={() => { setAudioUrl(audio.url); showToast("Audio added to track", "success"); }} className="w-7 h-7 rounded bg-emerald-600/20 hover:bg-emerald-500 text-emerald-400 hover:text-white flex items-center justify-center shrink-0 transition-colors opacity-0 group-hover:opacity-100" title="Add to Track"><Plus className="w-4 h-4" /></button>
+                                  <button onClick={() => { 
+                                      setAudioClips(prev => [...prev, {
+                                        id: crypto.randomUUID(),
+                                        url: audio.url,
+                                        startTime: globalTime,
+                                        duration: 0,
+                                        trimStart: 0,
+                                        trimEnd: 0,
+                                        fileDuration: 0,
+                                        volume: 1,
+                                        name: audio.name
+                                      }]); 
+                                      showToast("Audio added to track", "success"); 
+                                  }} className="w-7 h-7 rounded bg-emerald-600/20 hover:bg-emerald-500 text-emerald-400 hover:text-white flex items-center justify-center shrink-0 transition-colors opacity-0 group-hover:opacity-100" title="Add to Track"><Plus className="w-4 h-4" /></button>
                                   {!audio.id.toString().startsWith("default-") && (
                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                       <button onClick={e => handleEditAudioDetails(e, audio.id)} className="w-6 h-6 bg-indigo-500/20 hover:bg-indigo-500 text-indigo-400 hover:text-white rounded flex items-center justify-center transition-colors" title="Edit Details"><PenTool className="w-3 h-3" /></button>
                                       <button onClick={e => handleRemoveCustomAudio(e, audio.id)} className="w-6 h-6 bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white rounded flex items-center justify-center transition-colors" title="Delete"><X className="w-3 h-3" /></button>
                                     </div>
                                   )}
+                                  <div className="absolute right-0 top-[105%] opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none w-max max-w-[250px] bg-zinc-800 shadow-xl rounded px-2 py-1.5 text-xs font-medium text-zinc-200 border border-zinc-600 whitespace-normal break-words">
+                                    {audio.name || "Untitled Audio"}
+                                  </div>
                                 </div>
                               ))
                             )}
@@ -4357,22 +5257,211 @@ export default function VideoEditorPage() {
             )}
 
             {leftPanel === "shapes" && (
-              <div className="p-4 space-y-5 overflow-y-auto flex-1">
-                <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Shapes</p>
+              <div className="p-3 space-y-4 overflow-y-auto flex-1">
+                <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Shapes</p>
                 
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => handleAddShape("rect")} className="aspect-square bg-zinc-800 hover:bg-zinc-700 rounded-lg flex flex-col items-center justify-center gap-2 text-zinc-400 hover:text-white transition-colors">
-                    <Square className="w-6 h-6" />
-                    <span className="text-[10px] font-medium">Rectangle</span>
-                  </button>
-                  <button onClick={() => handleAddShape("circle")} className="aspect-square bg-zinc-800 hover:bg-zinc-700 rounded-lg flex flex-col items-center justify-center gap-2 text-zinc-400 hover:text-white transition-colors">
-                    <Circle className="w-6 h-6" />
-                    <span className="text-[10px] font-medium">Circle</span>
-                  </button>
-                  <button onClick={() => handleAddShape("triangle")} className="aspect-square bg-zinc-800 hover:bg-zinc-700 rounded-lg flex flex-col items-center justify-center gap-2 text-zinc-400 hover:text-white transition-colors">
-                    <Triangle className="w-6 h-6" />
-                    <span className="text-[10px] font-medium">Triangle</span>
-                  </button>
+                {(() => {
+                  const isSelectedShape = selectedObj && (
+                    selectedObj.type === 'rect' || 
+                    selectedObj.type === 'circle' || 
+                    selectedObj.type === 'triangle' || 
+                    selectedObj.type === 'path' ||
+                    (selectedObj as any).id?.startsWith("shp-")
+                  );
+                  if (isSelectedShape && selectedObj) {
+                    const activeFabricObj = selectedObj;
+                    return (
+                      <div className="space-y-3 bg-zinc-900/40 p-2.5 rounded-lg border border-zinc-800/80">
+                        <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                          <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Edit Selected Shape</p>
+                          <button 
+                            onClick={() => {
+                              fabricCanvasRef.current?.remove(activeFabricObj);
+                              const matchingAsset = canvasAssets.find(a => a.obj === activeFabricObj);
+                              if (matchingAsset) {
+                                setCanvasAssets(prev => prev.filter(a => a.id !== matchingAsset.id));
+                                setSelectedAssetId(null);
+                              }
+                              setSelectedObj(null);
+                              fabricCanvasRef.current?.renderAll();
+                            }}
+                            className="p-1 rounded hover:bg-red-500/20 text-zinc-400 hover:text-red-400 transition-colors"
+                            title="Delete Shape"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-zinc-400">Fill Color</label>
+                          <div className="flex items-center gap-2">
+                            <div className="relative w-6 h-6 rounded border border-zinc-700 overflow-hidden shrink-0">
+                              <input 
+                                type="color" 
+                                value={(activeFabricObj.fill as string) || "#transparent"} 
+                                onChange={e => { 
+                                  activeFabricObj.set('fill', e.target.value); 
+                                  fabricCanvasRef.current?.renderAll(); 
+                                  setCanvasAssets([...canvasAssets]); 
+                                }} 
+                                className="absolute -top-2 -left-2 w-10 h-10 cursor-pointer" 
+                              />
+                            </div>
+                            <span className="text-[10px] text-zinc-400 font-mono uppercase">{(activeFabricObj.fill as string) || "none"}</span>
+                          </div>
+                          {/* Quick color palette */}
+                          <div className="flex gap-1 flex-wrap mt-1">
+                            {["transparent", "#ffffff", "#000000", "#ef4444", "#3b82f6", "#22c55e", "#f59e0b", "#a855f7"].map(c => (
+                              <button 
+                                key={c} 
+                                onClick={() => { 
+                                  activeFabricObj.set('fill', c); 
+                                  fabricCanvasRef.current?.renderAll(); 
+                                  setCanvasAssets([...canvasAssets]); 
+                                }} 
+                                className={`w-5 h-5 rounded-full border transition-transform relative ${activeFabricObj.fill === c ? "scale-110 border-indigo-400 shadow-sm" : "border-zinc-700 hover:scale-110"}`} 
+                                style={{ backgroundColor: c === "transparent" ? "#27272a" : c }}
+                              >
+                                {c === "transparent" && <div className="absolute inset-0 flex items-center justify-center"><div className="w-full h-[1px] bg-red-500 rotate-45" /></div>}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-zinc-400">Stroke Color</label>
+                          <div className="flex items-center gap-2">
+                            <div className="relative w-6 h-6 rounded border border-zinc-700 overflow-hidden shrink-0">
+                              <input 
+                                type="color" 
+                                value={(activeFabricObj.stroke as string) || "#ffffff"} 
+                                onChange={e => { 
+                                  activeFabricObj.set('stroke', e.target.value); 
+                                  fabricCanvasRef.current?.renderAll(); 
+                                  setCanvasAssets([...canvasAssets]); 
+                                }} 
+                                className="absolute -top-2 -left-2 w-10 h-10 cursor-pointer" 
+                              />
+                            </div>
+                            <span className="text-[10px] text-zinc-400 font-mono uppercase">{(activeFabricObj.stroke as string) || "none"}</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-zinc-400">Stroke Width: {activeFabricObj.strokeWidth || 0}px</label>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="range" 
+                              min="0" 
+                              max="50" 
+                              value={activeFabricObj.strokeWidth || 0} 
+                              onChange={e => { 
+                                activeFabricObj.set('strokeWidth', parseInt(e.target.value)); 
+                                fabricCanvasRef.current?.renderAll(); 
+                                setCanvasAssets([...canvasAssets]); 
+                              }} 
+                              className="flex-1 accent-indigo-500 h-1" 
+                            />
+                            <span className="text-[10px] text-zinc-500 w-6">{activeFabricObj.strokeWidth || 0}px</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-zinc-400">Opacity: {Math.round((activeFabricObj.opacity ?? 1) * 100)}%</label>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="range" 
+                              min="0" 
+                              max="1" 
+                              step="0.05" 
+                              value={activeFabricObj.opacity ?? 1} 
+                              onChange={e => { 
+                                activeFabricObj.set('opacity', parseFloat(e.target.value)); 
+                                fabricCanvasRef.current?.renderAll(); 
+                                setCanvasAssets([...canvasAssets]); 
+                              }} 
+                              className="flex-1 accent-indigo-500 h-1" 
+                            />
+                            <span className="text-[10px] text-zinc-500 w-8 text-right">{Math.round((activeFabricObj.opacity ?? 1) * 100)}%</span>
+                          </div>
+                        </div>
+
+                        {/* Layering Controls */}
+                        <div className="space-y-1 pt-1">
+                          <label className="text-[10px] text-zinc-400">Layering</label>
+                          <div className="grid grid-cols-4 gap-1">
+                            <button 
+                              onClick={() => { 
+                                activeFabricObj.bringForward(); 
+                                fabricCanvasRef.current?.renderAll(); 
+                                refreshAssets(); 
+                              }}
+                              className="py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded text-[9px] font-bold uppercase transition-colors"
+                              title="Bring Forward"
+                            >
+                              Fwd
+                            </button>
+                            <button 
+                              onClick={() => { 
+                                activeFabricObj.sendBackwards(); 
+                                const proxy = fabricCanvasRef.current?.getObjects().find((o: any) => o.id === 'video-proxy');
+                                if (proxy) proxy.sendToBack();
+                                fabricCanvasRef.current?.renderAll(); 
+                                refreshAssets(); 
+                              }}
+                              className="py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded text-[9px] font-bold uppercase transition-colors"
+                              title="Send Backward"
+                            >
+                              Back
+                            </button>
+                            <button 
+                              onClick={() => { 
+                                activeFabricObj.bringToFront(); 
+                                fabricCanvasRef.current?.renderAll(); 
+                                refreshAssets(); 
+                              }}
+                              className="py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded text-[9px] font-bold uppercase transition-colors"
+                              title="Bring to Front"
+                            >
+                              Front
+                            </button>
+                            <button 
+                              onClick={() => { 
+                                activeFabricObj.sendToBack(); 
+                                const proxy = fabricCanvasRef.current?.getObjects().find((o: any) => o.id === 'video-proxy');
+                                if (proxy) proxy.sendToBack();
+                                fabricCanvasRef.current?.renderAll(); 
+                                refreshAssets(); 
+                              }}
+                              className="py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded text-[9px] font-bold uppercase transition-colors"
+                              title="Send to Back"
+                            >
+                              Bottom
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Add Shape</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => handleAddShape("rect")} className="aspect-square bg-zinc-800 hover:bg-zinc-700 rounded-lg flex flex-col items-center justify-center gap-2 text-zinc-400 hover:text-white transition-colors">
+                      <Square className="w-6 h-6" />
+                      <span className="text-[10px] font-medium">Rectangle</span>
+                    </button>
+                    <button onClick={() => handleAddShape("circle")} className="aspect-square bg-zinc-800 hover:bg-zinc-700 rounded-lg flex flex-col items-center justify-center gap-2 text-zinc-400 hover:text-white transition-colors">
+                      <Circle className="w-6 h-6" />
+                      <span className="text-[10px] font-medium">Circle</span>
+                    </button>
+                    <button onClick={() => handleAddShape("triangle")} className="aspect-square bg-zinc-800 hover:bg-zinc-700 rounded-lg flex flex-col items-center justify-center gap-2 text-zinc-400 hover:text-white transition-colors">
+                      <Triangle className="w-6 h-6" />
+                      <span className="text-[10px] font-medium">Triangle</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -4397,7 +5486,13 @@ export default function VideoEditorPage() {
             <div 
               ref={canvasContainerRef}
               className={`relative shadow-2xl overflow-hidden flex items-center justify-center transition-all duration-300 min-w-0 min-h-0 ${isLightTheme ? 'bg-white ring-1 ring-zinc-300' : 'bg-black ring-1 ring-zinc-700'}`}
-              style={{ width: aspectRatio.w, height: aspectRatio.h, maxWidth: '100%', maxHeight: 'calc(100% - 16px)' }}
+              style={{
+                aspectRatio: `${aspectRatio.w} / ${aspectRatio.h}`,
+                width: aspectRatio.w,
+                height: 'auto',
+                maxWidth: '100%',
+                maxHeight: 'calc(100% - 16px)'
+              }}
             >
               {clips.length > 0 ? (
                 <>
@@ -4418,7 +5513,8 @@ export default function VideoEditorPage() {
                     const hasFilter = clip.brightness !== 0 || clip.contrast !== 1 || clip.saturate !== 1 || clip.sepia !== 0 || clip.hueRotate !== 0;
                     const filterStr = hasFilter ? `brightness(${1 + clip.brightness}) contrast(${clip.contrast}) saturate(${clip.saturate}) sepia(${clip.sepia}) hue-rotate(${clip.hueRotate}deg)` : undefined;
                     
-                    let animScale = 1;
+                    let animScaleX = 1;
+                    let animScaleY = 1;
                     let animRotate = 0;
                     let animX = 0;
                     let animY = 0;
@@ -4429,7 +5525,7 @@ export default function VideoEditorPage() {
                       
                       switch(clip.animationType) {
                         case "pulse":
-                          animScale = 1 + Math.sin(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
+                          animScaleX = animScaleY = 1 + Math.sin(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
                           break;
                         case "wiggle":
                           animRotate = Math.sin(localTime * Math.PI * 2 * speed) * 15 * intensity;
@@ -4459,29 +5555,96 @@ export default function VideoEditorPage() {
                         case "slide-in-top":
                           if (localTime < 1 / speed) animY = -100 + (localTime * speed * 100);
                           break;
+                        case "zoom-in":
+                          animScaleX = animScaleY = 1 + (localTime * speed * 0.1 * intensity);
+                          break;
+                        case "zoom-out":
+                          animScaleX = animScaleY = Math.max(0, 1.2 - (localTime * speed * 0.1 * intensity));
+                          break;
+                        case "shake":
+                          animX = (Math.sin(localTime * 20 * speed) + Math.sin(localTime * 35 * speed)) * 5 * intensity;
+                          animY = (Math.cos(localTime * 25 * speed) + Math.sin(localTime * 40 * speed)) * 5 * intensity;
+                          break;
+                        case "ken-burns":
+                          animScaleX = animScaleY = 1 + (localTime * speed * 0.05 * intensity);
+                          animX = (localTime * speed * 5 * intensity);
+                          animY = (localTime * speed * 2 * intensity);
+                          break;
+                        case "heartbeat":
+                          const beat = (localTime * speed) % 1;
+                          animScaleX = animScaleY = 1 + (beat < 0.2 ? Math.sin(beat * 5 * Math.PI) * 0.2 * intensity : (beat > 0.3 && beat < 0.5 ? Math.sin((beat - 0.3) * 5 * Math.PI) * 0.2 * intensity : 0));
+                          break;
+                        case "pop-in":
+                          if (localTime < 1/speed) {
+                             const t = localTime * speed;
+                             animScaleX = animScaleY = 1 + Math.sin(t * Math.PI * 3) * Math.exp(-t * 5) * intensity;
+                          }
+                          break;
+                        case '3d-flip-h': animScaleX = Math.cos(localTime * Math.PI * 2 * speed); break;
+                        case '3d-flip-v': animScaleY = Math.cos(localTime * Math.PI * 2 * speed); break;
+                        case '3d-wobble': 
+                          animScaleX = 1 + Math.sin(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
+                          animScaleY = 1 + Math.cos(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
+                          break;
+                        case 'pass-through-lr':
+                          const durLR = clip.duration;
+                          if (localTime < 1/speed) animX = -100 + (localTime * speed * 100);
+                          else if (localTime > durLR - 1/speed) animX = (localTime - (durLR - 1/speed)) * speed * 100;
+                          break;
+                        case 'pass-through-rl':
+                          const durRL = clip.duration;
+                          if (localTime < 1/speed) animX = 100 - (localTime * speed * 100);
+                          else if (localTime > durRL - 1/speed) animX = -(localTime - (durRL - 1/speed)) * speed * 100;
+                          break;
+                        case 'pass-through-tb':
+                          const durTB = clip.duration;
+                          if (localTime < 1/speed) animY = -100 + (localTime * speed * 100);
+                          else if (localTime > durTB - 1/speed) animY = (localTime - (durTB - 1/speed)) * speed * 100;
+                          break;
+                        case 'pass-through-bt':
+                          const durBT = clip.duration;
+                          if (localTime < 1/speed) animY = 100 - (localTime * speed * 100);
+                          else if (localTime > durBT - 1/speed) animY = -(localTime - (durBT - 1/speed)) * speed * 100;
+                          break;
+                        case 'pro-whip-pan':
+                          animX = -100 * Math.exp(-localTime * speed * 12) * intensity;
+                          break;
+                        case 'pro-elastic':
+                          const tE2 = localTime * speed;
+                          animScaleX = animScaleY = 1 - Math.exp(-tE2 * 6) * Math.cos(tE2 * 15) * intensity;
+                          break;
+                        case 'pro-push':
+                          animScaleX = animScaleY = 1 + (localTime * speed * 0.02 * intensity);
+                          break;
+                        case 'pro-slider-left':
+                          animX = -(localTime * speed * 2 * intensity);
+                          break;
+                        case 'pro-slider-right':
+                          animX = (localTime * speed * 2 * intensity);
+                          break;
                       }
                     }
 
-                    const hasTransform = clip.x !== 0 || clip.y !== 0 || clip.videoZoom !== 1 || animScale !== 1 || animRotate !== 0 || animX !== 0 || animY !== 0;
+                    const hasTransform = clip.x !== 0 || clip.y !== 0 || clip.videoZoom !== 1 || animScaleX !== 1 || animScaleY !== 1 || animRotate !== 0 || animX !== 0 || animY !== 0;
                     const transformStr = hasTransform 
-                      ? `translate(${clip.x + animX}%, ${clip.y + animY}%) scale(${clip.videoZoom * animScale}) rotate(${animRotate}deg)` 
+                      ? `translate(${clip.x + animX}%, ${clip.y + animY}%) scale(${clip.videoZoom * animScaleX}, ${clip.videoZoom * animScaleY}) rotate(${animRotate}deg)` 
                       : undefined;
 
                     if (clip.type === "ticker") {
                       // Calculate scroll offset based on time and speed
                       const isLooping = clip.tickerLoop ?? true;
                       
-                      const lines1 = (clip.tickerText || "").split("\n");
+                      const text1Raw = (clip.tickerText || "").replace(/\n/g, " | ");
                       const fontSize1 = clip.tickerFontSize || 32;
-                      const h1Px = lines1.length * fontSize1 * 1.2;
+                      const h1Px = fontSize1 * 1.2;
                       
-                      let lines2: string[] = [];
+                      let text2Raw = "";
                       let fontSize2 = clip.tickerFontSize2 || 24;
                       let h2Px = 0;
                       
                       if (clip.enableSecondaryTicker) {
-                        lines2 = (clip.tickerText2 || "").split("\n");
-                        h2Px = lines2.length * fontSize2 * 1.2;
+                        text2Raw = (clip.tickerText2 || "").replace(/\n/g, " | ");
+                        h2Px = fontSize2 * 1.2;
                       }
 
                       const paddingPx = Math.max(fontSize1, fontSize2) * 0.8;
@@ -4497,20 +5660,39 @@ export default function VideoEditorPage() {
                       const y2Pct = topPct + paddingPct / 2 + h1Pct + h2Pct / 2;
 
                       let scrollOffset1 = localTime * (clip.tickerSpeed || 150);
-                      const estimatedTextWidth1 = (clip.tickerText?.length || 0) * fontSize1 * 0.7;
+                      const estimatedTextWidth1 = text1Raw.length * fontSize1 * 0.7;
                       const totalScrollDistance1 = aspectRatio.w + estimatedTextWidth1;
-                      if (isLooping && totalScrollDistance1 > 0) scrollOffset1 = scrollOffset1 % totalScrollDistance1;
+                      let isOffScreen1 = false;
+                      if (isLooping && totalScrollDistance1 > 0) {
+                         scrollOffset1 = scrollOffset1 % totalScrollDistance1;
+                      } else if (!isLooping && scrollOffset1 >= totalScrollDistance1) {
+                         scrollOffset1 = totalScrollDistance1 + 100;
+                         isOffScreen1 = true;
+                      }
 
                       let scrollOffset2 = localTime * (clip.tickerSpeed2 || 100);
-                      const estimatedTextWidth2 = (clip.tickerText2?.length || 0) * fontSize2 * 0.7;
+                      const estimatedTextWidth2 = text2Raw.length * fontSize2 * 0.7;
                       const totalScrollDistance2 = aspectRatio.w + estimatedTextWidth2;
-                      if (isLooping && totalScrollDistance2 > 0) scrollOffset2 = scrollOffset2 % totalScrollDistance2;
+                      let isOffScreen2 = true;
+                      if (clip.enableSecondaryTicker) {
+                         isOffScreen2 = false;
+                         if (isLooping && totalScrollDistance2 > 0) {
+                            scrollOffset2 = scrollOffset2 % totalScrollDistance2;
+                         } else if (!isLooping && scrollOffset2 >= totalScrollDistance2) {
+                            scrollOffset2 = totalScrollDistance2 + 100;
+                            isOffScreen2 = true;
+                         }
+                      }
+
+                      if (isOffScreen1 && isOffScreen2) {
+                         previewOpacity = 0;
+                      }
 
                       return (
                         <svg
                           key={clip.id}
                           className="absolute inset-0 w-full h-full pointer-events-none"
-                          style={{ zIndex: clip.isForeground ? 20 + i : i, opacity: previewOpacity }}
+                          style={{ zIndex: clip.isForeground ? 20 + i : i, opacity: previewOpacity, transform: `translate(${animX}%, ${animY}%) scale(${animScaleX}, ${animScaleY}) rotate(${animRotate}deg)`, transformOrigin: 'center' }}
                           viewBox={`0 0 ${aspectRatio.w} ${aspectRatio.h}`}
                         >
                           <rect x="0" y={`${topPct}%`} width="100%" height={`${heightPct}%`} fill={clip.tickerBgColor || "#cc0000"} />
@@ -4524,9 +5706,7 @@ export default function VideoEditorPage() {
                             fontFamily={clip.tickerFontFamily || 'Arial'}
                             fontWeight="bold"
                           >
-                            {lines1.map((line, idx, arr) => (
-                              <tspan key={idx} x={aspectRatio.w - scrollOffset1} dy={idx === 0 ? `-${(arr.length - 1) * 0.6}em` : '1.2em'}>{line}</tspan>
-                            ))}
+                            {text1Raw}
                           </text>
 
                           {clip.enableSecondaryTicker && (
@@ -4539,9 +5719,7 @@ export default function VideoEditorPage() {
                               fontFamily={clip.tickerFontFamily2 || 'Arial'}
                               fontWeight="bold"
                             >
-                              {lines2.map((line, idx, arr) => (
-                                <tspan key={idx} x={aspectRatio.w - scrollOffset2} dy={idx === 0 ? `-${(arr.length - 1) * 0.6}em` : '1.2em'}>{line}</tspan>
-                              ))}
+                              {text2Raw}
                             </text>
                           )}
                         </svg>
@@ -4586,14 +5764,21 @@ export default function VideoEditorPage() {
                       />
                     );
                   })}
-                  {audioUrl && (
+                  {audioClips.map(audio => (
                     <audio
-                      ref={audioRef}
-                      src={audioUrl}
+                      key={audio.id}
+                      ref={(el) => { if (el) audioRefs.current[audio.id] = el; else delete audioRefs.current[audio.id]; }}
+                      src={audio.url}
                       className="hidden"
                       crossOrigin="anonymous"
+                      onLoadedMetadata={(e) => {
+                          const dur = e.currentTarget.duration;
+                          if (!isNaN(dur) && audio.fileDuration === 0) {
+                              setAudioClips(prev => prev.map(a => a.id === audio.id ? { ...a, fileDuration: dur, trimEnd: dur, duration: dur } : a));
+                          }
+                      }}
                     />
-                  )}
+                  ))}
                 </>
               ) : (
                 // EMPTY STATE - Drag & Drop Zone
@@ -5034,7 +6219,7 @@ export default function VideoEditorPage() {
                       <button 
                         onClick={() => { 
                           activeFabricObj.sendBackwards(); 
-                          const proxy = fabricCanvasRef.current?.getObjects().find(o => (o as any).id === 'video-proxy');
+                          const proxy = fabricCanvasRef.current?.getObjects().find((o: any) => o.id === 'video-proxy');
                           if (proxy) proxy.sendToBack();
                           fabricCanvasRef.current?.renderAll(); 
                           refreshAssets(); 
@@ -5060,7 +6245,7 @@ export default function VideoEditorPage() {
                       <button 
                         onClick={() => { 
                           activeFabricObj.sendToBack(); 
-                          const proxy = fabricCanvasRef.current?.getObjects().find(o => (o as any).id === 'video-proxy');
+                          const proxy = fabricCanvasRef.current?.getObjects().find((o: any) => o.id === 'video-proxy');
                           if (proxy) proxy.sendToBack();
                           fabricCanvasRef.current?.renderAll(); 
                           refreshAssets(); 
@@ -5116,6 +6301,75 @@ export default function VideoEditorPage() {
                     Show for Entire Video
                   </button>
 
+                  {/* TIMING CONTROLS */}
+                  <div className="pt-4 border-t border-zinc-800 space-y-3">
+                    <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Settings className="w-3 h-3 text-zinc-400" /> Timing (Seconds)
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-medium text-zinc-400">Start Time</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={Math.max(0, parseFloat(((activeFabricObj as any).endTime || totalDuration).toFixed(2)) - 0.1)}
+                          step={0.1}
+                          value={parseFloat(((activeFabricObj as any).startTime || 0).toFixed(2))}
+                          onChange={e => {
+                            const newStart = parseFloat(e.target.value);
+                            if (!isNaN(newStart)) {
+                              const currentEnd = (activeFabricObj as any).endTime || totalDuration;
+                              (activeFabricObj as any).startTime = Math.max(0, Math.min(newStart, currentEnd - 0.1));
+                              fabricCanvasRef.current?.renderAll();
+                              refreshAssets();
+                            }
+                          }}
+                          className="w-full bg-zinc-800 text-zinc-200 text-xs rounded-md px-2 py-1.5 border border-zinc-700 focus:outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-medium text-zinc-400">End Time</label>
+                        <input
+                          type="number"
+                          min={parseFloat(((activeFabricObj as any).startTime || 0).toFixed(2)) + 0.1}
+                          max={totalDuration}
+                          step={0.1}
+                          value={parseFloat(((activeFabricObj as any).endTime || totalDuration).toFixed(2))}
+                          onChange={e => {
+                            const newEnd = parseFloat(e.target.value);
+                            if (!isNaN(newEnd)) {
+                              const currentStart = (activeFabricObj as any).startTime || 0;
+                              (activeFabricObj as any).endTime = Math.max(currentStart + 0.1, Math.min(newEnd, totalDuration));
+                              fabricCanvasRef.current?.renderAll();
+                              refreshAssets();
+                            }
+                          }}
+                          className="w-full bg-zinc-800 text-zinc-200 text-xs rounded-md px-2 py-1.5 border border-zinc-700 focus:outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-zinc-400">Duration</label>
+                      <input
+                        type="number"
+                        min={0.1}
+                        max={totalDuration - parseFloat(((activeFabricObj as any).startTime || 0).toFixed(2))}
+                        step={0.1}
+                        value={parseFloat((((activeFabricObj as any).endTime || totalDuration) - ((activeFabricObj as any).startTime || 0)).toFixed(2))}
+                        onChange={e => {
+                          const newDur = parseFloat(e.target.value);
+                          if (!isNaN(newDur) && newDur > 0) {
+                            const currentStart = (activeFabricObj as any).startTime || 0;
+                            (activeFabricObj as any).endTime = Math.min(currentStart + newDur, totalDuration);
+                            fabricCanvasRef.current?.renderAll();
+                            refreshAssets();
+                          }
+                        }}
+                        className="w-full bg-zinc-800 text-zinc-200 text-xs rounded-md px-2 py-1.5 border border-zinc-700 focus:outline-none focus:border-indigo-500 font-mono"
+                      />
+                    </div>
+                  </div>
+
                   {/* FABRIC ANIMATIONS */}
                   <div className="pt-4 border-t border-zinc-800 space-y-3">
                     <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Sparkles className="w-3 h-3" /> Animations</p>
@@ -5144,6 +6398,37 @@ export default function VideoEditorPage() {
                           <option value="slide-in-right">Slide In (Right)</option>
                           <option value="slide-in-bottom">Slide In (Bottom)</option>
                           <option value="slide-in-top">Slide In (Top)</option>
+                        </optgroup>
+                        <optgroup label="Zoom">
+                          <option value="zoom-in">Zoom In</option>
+                          <option value="zoom-out">Zoom Out</option>
+                        </optgroup>
+                        <optgroup label="Cinematic & Advanced">
+                          <option value="shake">Camera Shake</option>
+                          <option value="ken-burns">Ken Burns (Pan & Zoom)</option>
+                          <option value="heartbeat">Heartbeat</option>
+                          <option value="pop-in">Pop In (Bounce)</option>
+                        </optgroup>
+                        <optgroup label="3D & Perspective">
+                          <option value="3d-flip-h">3D Coin Flip (Horizontal)</option>
+                          <option value="3d-flip-v">3D Coin Flip (Vertical)</option>
+                          <option value="3d-wobble">3D Jello Wobble</option>
+                        </optgroup>
+                        <optgroup label="Pass Through">
+                          <option value="pass-through-lr">Pass Through (Left to Right)</option>
+                          <option value="pass-through-rl">Pass Through (Right to Left)</option>
+                          <option value="pass-through-tb">Pass Through (Top to Bottom)</option>
+                          <option value="pass-through-bt">Pass Through (Bottom to Top)</option>
+                        </optgroup>
+                        <optgroup label="Pro Essentials">
+                          <option value="pro-whip-pan">Whip Pan (Fast Snap)</option>
+                          <option value="pro-elastic">Elastic Pop (Overshoot)</option>
+                          <option value="pro-push">Cinematic Push (Slow Dolly)</option>
+                          <option value="pro-slider-left">Cinematic Slider (Left)</option>
+                          <option value="pro-slider-right">Cinematic Slider (Right)</option>
+                          <option value="pro-glitch">Digital Glitch</option>
+                          <option value="pro-pan-up">Pedestal Up</option>
+                          <option value="pro-pan-down">Pedestal Down</option>
                         </optgroup>
                       </select>
                     </div>
@@ -5225,7 +6510,7 @@ export default function VideoEditorPage() {
                   <button 
                     onClick={() => {
                       setClips(prev => prev.filter(c => c.id !== selectedClip.id));
-                      setSelectedClipId(null);
+                      setSelectedClipIds([]);
                     }}
                     className="p-1 rounded hover:bg-red-500/20 text-zinc-400 hover:text-red-400 transition-colors"
                   >
@@ -5241,6 +6526,18 @@ export default function VideoEditorPage() {
                     className="w-full h-24 bg-zinc-800 text-zinc-200 text-sm rounded-md p-2 border border-zinc-700 focus:outline-none focus:border-indigo-500 custom-scrollbar"
                     placeholder="Enter breaking news here..."
                   />
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {['🔥', '🚀', '⭐', '💥', '🚨', '✅', '✨', '👇', '🛒', '🎯'].map(emoji => (
+                      <button 
+                        key={emoji}
+                        onClick={() => updateSelectedClip({ tickerText: (selectedClip.tickerText || "") + emoji })}
+                        className="w-6 h-6 flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 rounded text-sm border border-zinc-700 transition-colors"
+                        title={`Add ${emoji}`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -5284,6 +6581,18 @@ export default function VideoEditorPage() {
                           className="w-full h-16 bg-zinc-800 text-zinc-200 text-sm rounded-md p-2 border border-zinc-700 focus:outline-none focus:border-indigo-500 custom-scrollbar"
                           placeholder="Enter details..."
                         />
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {['🔥', '🚀', '⭐', '💥', '🚨', '✅', '✨', '👇', '🛒', '🎯'].map(emoji => (
+                            <button 
+                              key={emoji}
+                              onClick={() => updateSelectedClip({ tickerText2: (selectedClip.tickerText2 || "") + emoji })}
+                              className="w-6 h-6 flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 rounded text-sm border border-zinc-700 transition-colors"
+                              title={`Add ${emoji}`}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-zinc-300">Secondary Font</label>
@@ -5303,27 +6612,66 @@ export default function VideoEditorPage() {
                   )}
                 </div>
 
-                <div className="space-y-2 bg-indigo-500/10 p-3 rounded-lg border border-indigo-500/20">
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="text-xs font-bold text-indigo-300 uppercase tracking-wider">Clip Duration</label>
-                    <span className="text-xs text-indigo-400 font-mono">{selectedClip.duration}s</span>
-                  </div>
-                  <input 
-                    type="range" min={1} max={300} step={1} 
-                    value={selectedClip.duration} 
-                    onChange={e => {
-                      const newDur = +e.target.value;
-                      updateSelectedClip({ 
-                        duration: newDur, 
-                        trimEnd: newDur, 
-                        fileDuration: newDur 
-                      });
-                    }} 
-                    className="w-full accent-indigo-500" 
-                  />
-                  <p className="text-[10px] text-indigo-400/70 mt-1 leading-tight">
-                    Increase this to make the ticker stay on screen longer.
+                {/* TICKER TIMING */}
+                <div className="space-y-3 bg-indigo-500/5 p-3 rounded-lg border border-indigo-500/10">
+                  <p className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Settings className="w-3.5 h-3.5 text-indigo-400" /> Ticker Timing (Seconds)
                   </p>
+                  
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-medium text-zinc-400">Start Time</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={parseFloat((selectedClip.startTime || 0).toFixed(2))}
+                      onChange={e => {
+                        const newStart = parseFloat(e.target.value);
+                        if (!isNaN(newStart)) {
+                          updateSelectedClip({ startTime: Math.max(0, newStart) });
+                        }
+                      }}
+                      className="w-full bg-zinc-800 text-zinc-200 text-xs rounded-md px-2 py-1.5 border border-zinc-700 focus:outline-none focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-medium text-zinc-400">Duration</label>
+                      <span className="text-[10px] text-indigo-400 font-mono">{selectedClip.duration.toFixed(1)}s</span>
+                    </div>
+                    <input 
+                      type="range" min={1} max={300} step={1} 
+                      value={selectedClip.duration} 
+                      onChange={e => {
+                        const newDur = +e.target.value;
+                        updateSelectedClip({ 
+                          duration: newDur, 
+                          trimEnd: newDur, 
+                          fileDuration: newDur 
+                        });
+                      }} 
+                      className="w-full accent-indigo-500 mb-1" 
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      max={300}
+                      step={0.1}
+                      value={parseFloat((selectedClip.duration || 1).toFixed(2))}
+                      onChange={e => {
+                        const newDur = parseFloat(e.target.value);
+                        if (!isNaN(newDur) && newDur >= 1) {
+                          updateSelectedClip({ 
+                            duration: newDur, 
+                            trimEnd: newDur, 
+                            fileDuration: newDur 
+                          });
+                        }
+                      }}
+                      className="w-full bg-zinc-800 text-zinc-200 text-xs rounded-md px-2 py-1.5 border border-zinc-700 focus:outline-none focus:border-indigo-500 font-mono"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -5440,6 +6788,37 @@ export default function VideoEditorPage() {
                         <option value="slide-in-bottom">Slide In (Bottom)</option>
                         <option value="slide-in-top">Slide In (Top)</option>
                       </optgroup>
+                      <optgroup label="Zoom">
+                        <option value="zoom-in">Zoom In</option>
+                        <option value="zoom-out">Zoom Out</option>
+                      </optgroup>
+                      <optgroup label="Cinematic & Advanced">
+                        <option value="shake">Camera Shake</option>
+                        <option value="ken-burns">Ken Burns (Pan & Zoom)</option>
+                        <option value="heartbeat">Heartbeat</option>
+                        <option value="pop-in">Pop In (Bounce)</option>
+                      </optgroup>
+                      <optgroup label="3D & Perspective">
+                        <option value="3d-flip-h">3D Coin Flip (Horizontal)</option>
+                        <option value="3d-flip-v">3D Coin Flip (Vertical)</option>
+                        <option value="3d-wobble">3D Jello Wobble</option>
+                      </optgroup>
+                      <optgroup label="Pass Through">
+                        <option value="pass-through-lr">Pass Through (Left to Right)</option>
+                        <option value="pass-through-rl">Pass Through (Right to Left)</option>
+                        <option value="pass-through-tb">Pass Through (Top to Bottom)</option>
+                        <option value="pass-through-bt">Pass Through (Bottom to Top)</option>
+                      </optgroup>
+                      <optgroup label="Pro Essentials">
+                        <option value="pro-whip-pan">Whip Pan (Fast Snap)</option>
+                        <option value="pro-elastic">Elastic Pop (Overshoot)</option>
+                        <option value="pro-push">Cinematic Push (Slow Dolly)</option>
+                        <option value="pro-slider-left">Cinematic Slider (Left)</option>
+                        <option value="pro-slider-right">Cinematic Slider (Right)</option>
+                        <option value="pro-glitch">Digital Glitch</option>
+                        <option value="pro-pan-up">Pedestal Up</option>
+                        <option value="pro-pan-down">Pedestal Down</option>
+                      </optgroup>
                     </select>
                   </div>
                   {selectedClip.animationType && selectedClip.animationType !== "none" && (
@@ -5487,7 +6866,17 @@ export default function VideoEditorPage() {
                   </button>
                   <button 
                     onClick={() => {
-                      setAudioUrl(selectedClip.url);
+                      setAudioClips(prev => [...prev, {
+                          id: crypto.randomUUID(),
+                          url: selectedClip.url,
+                          startTime: globalTime,
+                          duration: 0,
+                          trimStart: 0,
+                          trimEnd: 0,
+                          fileDuration: 0,
+                          volume: 1,
+                          name: selectedClip.name
+                      }]);
                       updateSelectedClip({ volume: 0 });
                       showToast("Audio extracted to background track", "success");
                     }}
@@ -5496,6 +6885,65 @@ export default function VideoEditorPage() {
                   >
                     <Music className="w-4 h-4" /> Extract Audio
                   </button>
+                </div>
+
+                {/* CLIP TIMING */}
+                <div className="pt-4 border-t border-zinc-800 space-y-3">
+                  <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Settings className="w-3 h-3 text-zinc-400" /> Clip Timing (Seconds)
+                  </p>
+                  
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-medium text-zinc-400">Start Time</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={parseFloat((selectedClip.startTime || 0).toFixed(2))}
+                      onChange={e => {
+                        const newStart = parseFloat(e.target.value);
+                        if (!isNaN(newStart)) {
+                          updateSelectedClip({ startTime: Math.max(0, newStart) });
+                        }
+                      }}
+                      className="w-full bg-zinc-800 text-zinc-200 text-xs rounded-md px-2 py-1.5 border border-zinc-700 focus:outline-none focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+
+                  {selectedClip.type === "image" ? (
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-zinc-400">Image Duration</label>
+                      <input
+                        type="number"
+                        min={0.5}
+                        max={300}
+                        step={0.1}
+                        value={parseFloat((selectedClip.duration || 5).toFixed(2))}
+                        onChange={e => {
+                          const newDur = parseFloat(e.target.value);
+                          if (!isNaN(newDur) && newDur >= 0.5) {
+                            updateSelectedClip({
+                              duration: newDur,
+                              trimEnd: newDur,
+                              fileDuration: newDur
+                            });
+                          }
+                        }}
+                        className="w-full bg-zinc-800 text-zinc-200 text-xs rounded-md px-2 py-1.5 border border-zinc-700 focus:outline-none focus:border-indigo-500 font-mono"
+                      />
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 text-zinc-400">
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] block">Video Duration</span>
+                        <span className="text-xs font-mono font-semibold bg-zinc-800/50 px-2 py-1 rounded border border-zinc-800 text-zinc-300 block">{selectedClip.duration.toFixed(2)}s</span>
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] block">End Time</span>
+                        <span className="text-xs font-mono font-semibold bg-zinc-800/50 px-2 py-1 rounded border border-zinc-800 text-zinc-300 block">{(selectedClip.startTime + selectedClip.duration).toFixed(2)}s</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* TRACK LAYERING */}
@@ -5589,7 +7037,58 @@ export default function VideoEditorPage() {
                   </div>
                 </div>
 
-                <div className="border-t border-zinc-800 pt-4 space-y-4">
+                <div className="border-t border-zinc-800 pt-4 space-y-4 mt-4">
+                  <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Sparkles className="w-3 h-3" /> Transitions</p>
+                  
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-zinc-300">Transition In Style</label>
+                      <select 
+                        value={selectedClip.transitionType || "none"} 
+                        onChange={e => updateSelectedClip({ transitionType: e.target.value as any })} 
+                        className="w-full bg-zinc-800 text-zinc-200 text-sm rounded-md px-2 py-1.5 border border-zinc-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+                      >
+                        <option value="none">None (Cut)</option>
+                        <optgroup label="Basic">
+                          <option value="fade">Crossfade</option>
+                          <option value="dissolve">Dissolve</option>
+                        </optgroup>
+                        <optgroup label="Wipes & Slides">
+                          <option value="wipeleft">Wipe Left</option>
+                          <option value="wiperight">Wipe Right</option>
+                          <option value="slideleft">Slide Left</option>
+                          <option value="slideright">Slide Right</option>
+                        </optgroup>
+                        <optgroup label="Creative">
+                          <option value="circlecrop">Circle Crop</option>
+                          <option value="pixelize">Pixelize</option>
+                        </optgroup>
+                        <optgroup label="Cinematic & Ads">
+                          <option value="flash-white">Flash to White</option>
+                          <option value="zoom-in">Zoom In Reveal</option>
+                        </optgroup>
+                      </select>
+                    </div>
+
+                    {selectedClip.transitionType && selectedClip.transitionType !== "none" && (
+                      <div className="space-y-2 bg-indigo-500/5 p-3 rounded-md border border-indigo-500/10">
+                        <div className="flex justify-between">
+                          <label className="text-xs font-medium text-zinc-300">Duration (seconds)</label>
+                          <span className="text-zinc-500 tabular-nums">{(selectedClip.transitionDuration || 1.0).toFixed(1)}s</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="0.1" max="3.0" step="0.1" 
+                          value={selectedClip.transitionDuration || 1.0} 
+                          onChange={(e) => updateSelectedClip({ transitionDuration: +e.target.value })} 
+                          className="w-full accent-indigo-500 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="border-t border-zinc-800 pt-4 space-y-4 mt-4">
                   <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Sparkles className="w-3 h-3" /> Animations</p>
                   
                   <div className="space-y-3">
@@ -5614,6 +7113,37 @@ export default function VideoEditorPage() {
                           <option value="slide-in-right">Slide In (Right)</option>
                           <option value="slide-in-bottom">Slide In (Bottom)</option>
                           <option value="slide-in-top">Slide In (Top)</option>
+                        </optgroup>
+                        <optgroup label="Zoom">
+                          <option value="zoom-in">Zoom In</option>
+                          <option value="zoom-out">Zoom Out</option>
+                        </optgroup>
+                        <optgroup label="Cinematic & Advanced">
+                          <option value="shake">Camera Shake</option>
+                          <option value="ken-burns">Ken Burns (Pan & Zoom)</option>
+                          <option value="heartbeat">Heartbeat</option>
+                          <option value="pop-in">Pop In (Bounce)</option>
+                        </optgroup>
+                        <optgroup label="3D & Perspective">
+                          <option value="3d-flip-h">3D Coin Flip (Horizontal)</option>
+                          <option value="3d-flip-v">3D Coin Flip (Vertical)</option>
+                          <option value="3d-wobble">3D Jello Wobble</option>
+                        </optgroup>
+                        <optgroup label="Pass Through">
+                          <option value="pass-through-lr">Pass Through (Left to Right)</option>
+                          <option value="pass-through-rl">Pass Through (Right to Left)</option>
+                          <option value="pass-through-tb">Pass Through (Top to Bottom)</option>
+                          <option value="pass-through-bt">Pass Through (Bottom to Top)</option>
+                        </optgroup>
+                        <optgroup label="Pro Essentials">
+                          <option value="pro-whip-pan">Whip Pan (Fast Snap)</option>
+                          <option value="pro-elastic">Elastic Pop (Overshoot)</option>
+                          <option value="pro-push">Cinematic Push (Slow Dolly)</option>
+                          <option value="pro-slider-left">Cinematic Slider (Left)</option>
+                          <option value="pro-slider-right">Cinematic Slider (Right)</option>
+                          <option value="pro-glitch">Digital Glitch</option>
+                          <option value="pro-pan-up">Pedestal Up</option>
+                          <option value="pro-pan-down">Pedestal Down</option>
                         </optgroup>
                       </select>
                     </div>
@@ -5705,6 +7235,24 @@ export default function VideoEditorPage() {
                     </div>
                   ))}
                   </div>
+                  {selectedClip && selectedClip.type === "video" && (
+                    <div className="grid grid-cols-2 gap-2 mt-4">
+                      <button
+                        onClick={handleFitCanvas}
+                        className="py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-lg text-xs font-semibold transition-colors"
+                        title="Fit video within canvas (letterbox/pillarbox)"
+                      >
+                        Fit Canvas
+                      </button>
+                      <button
+                        onClick={handleFillCanvas}
+                        className="py-1.5 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/20 hover:border-transparent rounded-lg text-xs font-bold transition-colors"
+                        title="Zoom/crop video to cover the entire canvas area"
+                      >
+                        Fill Canvas
+                      </button>
+                    </div>
+                  )}
                   <button 
                     onClick={() => { updateSelectedClip({ videoZoom: 1, x: 0, y: 0, brightness: 0, contrast: 1, saturate: 1, sepia: 0, hueRotate: 0 }); setActiveFilterId("none"); }}
                     className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-lg text-xs font-semibold transition-colors mt-4"
@@ -5713,7 +7261,102 @@ export default function VideoEditorPage() {
                   </button>
                 </div>
               </div>
-            ) : (
+            ) : selectedAudioClipId ? (() => {
+              const activeAudio = audioClips.find(a => a.id === selectedAudioClipId);
+              if (!activeAudio) return null;
+              return (
+              <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                  <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <Music className="w-3.5 h-3.5 text-emerald-400" /> Audio Track
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => {
+                        if (customAudios.some(a => a.url === activeAudio.url)) {
+                          showToast("This audio clip is already in your library", "info");
+                          return;
+                        }
+                        const newAudio = { id: crypto.randomUUID(), url: activeAudio.url, name: activeAudio.name || "Saved Audio", artist: "Custom" };
+                        const newAudios = [...customAudios, newAudio];
+                        setCustomAudios(newAudios);
+                        localStorage.setItem("custom_video_audios", JSON.stringify(newAudios));
+                        showToast("Saved to Audio Library", "success");
+                      }}
+                      className="p-1 rounded hover:bg-emerald-500/20 text-zinc-400 hover:text-emerald-400 transition-colors"
+                      title="Save to Library"
+                    >
+                      <Save className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setAudioClips(prev => prev.filter(a => a.id !== selectedAudioClipId));
+                        setSelectedAudioClipId(null);
+                      }}
+                      className="p-1 rounded hover:bg-red-500/20 text-zinc-400 hover:text-red-400 transition-colors"
+                      title="Delete Audio"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <Type className="w-3 h-3" /> Clip Name
+                  </p>
+                  <input
+                    type="text"
+                    value={activeAudio.name || ""}
+                    onChange={(e) => setAudioClips(prev => prev.map(a => a.id === selectedAudioClipId ? { ...a, name: e.target.value } : a))}
+                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500 transition-colors"
+                    placeholder="Enter clip name..."
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <Volume2 className="w-3 h-3" /> Volume
+                  </p>
+                  
+                  <div className="space-y-2 bg-emerald-500/5 p-3 rounded-md border border-emerald-500/10">
+                    <div className="flex justify-between">
+                      <label className="text-[10px] font-medium text-zinc-300">Volume Level</label>
+                      <span className="text-[10px] text-zinc-500 tabular-nums">{Math.round((activeAudio.volume ?? 1) * 100)}%</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0" max="2" step="0.1" 
+                      value={activeAudio.volume ?? 1} 
+                      onChange={(e) => setAudioClips(prev => prev.map(a => a.id === selectedAudioClipId ? { ...a, volume: +e.target.value } : a))} 
+                      className="w-full accent-emerald-500 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                </div>
+                
+                <div className="border-t border-zinc-800 pt-4 space-y-4">
+                  <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <SlidersHorizontal className="w-3 h-3" /> Timing
+                  </p>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-medium text-zinc-400">Start Time</label>
+                      <div className="bg-zinc-800 px-3 py-2 rounded-md text-[10px] text-zinc-300 font-mono text-center">
+                        {activeAudio.startTime.toFixed(2)}s
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-medium text-zinc-400">Duration</label>
+                      <div className="bg-zinc-800 px-3 py-2 rounded-md text-[10px] text-zinc-300 font-mono text-center">
+                        {activeAudio.duration.toFixed(2)}s
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              );
+            })() : (
               <p className="text-xs text-zinc-500 text-center py-4">Select an item on the canvas or timeline to edit its properties.</p>
             )}
 
@@ -5774,10 +7417,11 @@ export default function VideoEditorPage() {
               <button onClick={() => historyState.undo()} disabled={!historyState.canUndo} className="p-1.5 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Undo Timeline (Ctrl+Z)"><Undo2 className="w-4 h-4" /></button>
               <button onClick={() => historyState.redo()} disabled={!historyState.canRedo} className="p-1.5 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Redo Timeline (Ctrl+Y)"><Redo2 className="w-4 h-4" /></button>
               <div className="w-px h-4 bg-zinc-700 mx-1" />
+              <button onClick={() => setSelectedClipIds(clips.map(c => c.id))} className="p-1.5 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded transition-colors" title="Select All (Ctrl+A)"><ListChecks className="w-4 h-4" /></button>
               <button onClick={handleDuplicateClip} className="p-1.5 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded transition-colors" title="Duplicate Selected Clip (Ctrl+D)"><Layers className="w-4 h-4" /></button>
               <button onClick={handleSplitClip} className="p-1.5 hover:bg-zinc-800 text-pink-400 hover:text-pink-300 rounded transition-colors" title="Split at Playhead"><Scissors className="w-4 h-4" /></button>
               <button onClick={() => {
-                const hasContent = clips.length > 0 || canvasAssets.filter(a => a.id !== 'video-proxy').length > 0 || audioUrl;
+                const hasContent = clips.length > 0 || canvasAssets.filter(a => a.id !== 'video-proxy').length > 0 || audioClips.length > 0;
                 if (hasContent) {
                   setShowClearConfirm(true);
                 }
@@ -5882,7 +7526,7 @@ export default function VideoEditorPage() {
                       playbackRate: 1, volume: 1, opacity: 1 
                     }; 
                     setClips(prev => [...prev, newClipObj]); 
-                    setSelectedClipId(newClipObj.id); 
+                    setSelectedClipIds([newClipObj.id]); 
                     showToast("Clip dropped to timeline", "success");
                   }
                 } catch(err) {}
@@ -5935,19 +7579,43 @@ export default function VideoEditorPage() {
                         const dropX = Math.max(0, e.clientX - rect.left - 56);
                         const dropTime = (dropX / trackWidth) * (totalDuration || 1);
                         
+                        const isImage = data.payload.type === "image";
+                        
                         const newClipObj: VideoClip = { 
-                          id: crypto.randomUUID(), type: "video", 
+                          id: crypto.randomUUID(), type: isImage ? "image" : "video", 
                           name: data.payload.name, url: data.payload.url, 
                           startTime: dropTime, fileDuration: data.payload.fileDuration, 
-                          duration: data.payload.duration, trimStart: data.payload.trimStart, 
-                          trimEnd: data.payload.trimEnd, trackId: track.id, 
-                          color: `hsl(${Math.floor(Math.random()*360)}, 70%, 55%)`, 
+                          duration: data.payload.duration, trimStart: data.payload.trimStart || 0, 
+                          trimEnd: data.payload.trimEnd || data.payload.duration, trackId: track.id, 
+                          color: isImage ? "#e11d48" : `hsl(${Math.floor(Math.random()*360)}, 70%, 55%)`, 
                           x: 0, y: 0, videoZoom: 1, brightness: 0, contrast: 1, saturate: 1, sepia: 0, hueRotate: 0, 
                           enableChromaKey: false, chromaKeyColor: "#00ff00", chromaKeySimilarity: 0.3, 
-                          playbackRate: 1, volume: 1, opacity: 1 
+                          playbackRate: 1, volume: isImage ? 0 : 1, opacity: 1 
                         }; 
+                        
+                        // Adapt canvas to video ratio if it's the first clip
+                        if (clips.length === 0) {
+                          if (isImage) {
+                            const img = new window.Image();
+                            img.src = data.payload.url;
+                            img.onload = () => {
+                              adjustCanvasToVideoRatio(img.width / img.height);
+                            };
+                          } else {
+                            const v = document.createElement("video");
+                            v.src = data.payload.url;
+                            v.onloadedmetadata = () => {
+                              const videoW = v.videoWidth || 1920;
+                              const videoH = v.videoHeight || 1080;
+                              adjustCanvasToVideoRatio(videoW / videoH);
+                              v.remove();
+                            };
+                            v.onerror = () => v.remove();
+                          }
+                        }
+                        
                         setClips(prev => [...prev, newClipObj]); 
-                        setSelectedClipId(newClipObj.id); 
+                        setSelectedClipIds([newClipObj.id]); 
                         showToast("Clip dropped to timeline", "success");
                       } else if (data.type === "audio_clip_drop") {
                         setAudioUrl(data.payload.url);
@@ -5991,7 +7659,10 @@ export default function VideoEditorPage() {
                     )}
 
                     {tIdx === videoTracks.length - 1 && (
-                       <button onClick={() => setVideoTracks([...videoTracks, { id: `v${Date.now()}`, name: `V${videoTracks.length + 1}` }])}
+                       <button onClick={() => {
+                           const vCount = videoTracks.filter(t => t.name.startsWith("V")).length;
+                           setVideoTracks([...videoTracks, { id: `v${Date.now()}`, name: `V${vCount + 1}` }]);
+                       }}
                                className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 z-20 w-5 h-5 bg-zinc-800 rounded flex items-center justify-center hover:bg-indigo-600 transition-colors shadow border border-zinc-700" title="Add Video Track">
                           <Plus className="w-3 h-3 text-white" />
                        </button>
@@ -6001,7 +7672,7 @@ export default function VideoEditorPage() {
                     {clips.filter(c => c.trackId === track.id).map(clip => {
                       const leftPct = (clip.startTime / (totalDuration || 1)) * 100;
                       const widthPct = (clip.duration / (totalDuration || 1)) * 100;
-                      const isSelected = selectedClip?.id === clip.id;
+                      const isSelected = selectedClipIds.includes(clip.id);
                       return (
                         <div 
                           key={clip.id}
@@ -6009,16 +7680,27 @@ export default function VideoEditorPage() {
                           style={{ left: `${leftPct}%`, width: `${widthPct}%`, minWidth: '40px' }}
                           onMouseDown={(e) => {
                              e.stopPropagation();
-                             setSelectedClipId(clip.id);
-                             setSelectedAssetId(null);
                              fabricCanvasRef.current?.discardActiveObject();
                              fabricCanvasRef.current?.renderAll();
+                             let newSelection = selectedClipIds;
+                             if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                                newSelection = selectedClipIds.includes(clip.id) ? selectedClipIds.filter(id => id !== clip.id) : [...selectedClipIds, clip.id];
+                             } else {
+                                if (!selectedClipIds.includes(clip.id)) {
+                                    newSelection = [clip.id];
+                                }
+                             }
+                             setSelectedClipIds(newSelection);
+                             setSelectedAssetId(null);
+                             setSelectedAudioClipId(null);
                              setActiveTab("adjust");
                              setClipDragState({
                                clipId: clip.id, type: 'move', startX: e.clientX,
                                initialStart: clip.startTime, initialDuration: clip.duration,
                                initialTrimStart: clip.trimStart || 0, initialTrimEnd: clip.trimEnd || clip.fileDuration,
-                               fileDuration: clip.fileDuration
+                               fileDuration: clip.fileDuration,
+                               initialTotalDuration: totalDuration || 1,
+                               groupedClips: newSelection.includes(clip.id) ? clips.filter(c => newSelection.includes(c.id) && c.id !== clip.id).map(c => ({ id: c.id, initialStart: c.startTime })) : []
                              });
                              handleSeek({ target: { value: clip.startTime.toString() } } as any);
                           }}
@@ -6026,23 +7708,25 @@ export default function VideoEditorPage() {
                           <div className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-indigo-400/50 rounded-l-md z-20"
                                onMouseDown={(e) => {
                                  e.stopPropagation();
-                                 setSelectedClipId(clip.id);
-                                 setSelectedAssetId(null);
                                  fabricCanvasRef.current?.discardActiveObject();
                                  fabricCanvasRef.current?.renderAll();
+                                 if (!selectedClipIds.includes(clip.id)) setSelectedClipIds([clip.id]);
+                                 setSelectedAssetId(null);
+                                 setSelectedAudioClipId(null);
                                  setActiveTab("adjust");
-                                 setClipDragState({ clipId: clip.id, type: 'trimStart', startX: e.clientX, initialStart: clip.startTime, initialDuration: clip.duration, initialTrimStart: clip.trimStart || 0, initialTrimEnd: clip.trimEnd || clip.fileDuration, fileDuration: clip.fileDuration });
+                                 setClipDragState({ clipId: clip.id, type: 'trimStart', startX: e.clientX, initialStart: clip.startTime, initialDuration: clip.duration, initialTrimStart: clip.trimStart || 0, initialTrimEnd: clip.trimEnd || clip.fileDuration, fileDuration: clip.fileDuration, initialTotalDuration: totalDuration || 1 });
                                }}
                           />
                           <div className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-indigo-400/50 rounded-r-md z-20"
                                onMouseDown={(e) => {
                                  e.stopPropagation();
-                                 setSelectedClipId(clip.id);
-                                 setSelectedAssetId(null);
                                  fabricCanvasRef.current?.discardActiveObject();
                                  fabricCanvasRef.current?.renderAll();
+                                 if (!selectedClipIds.includes(clip.id)) setSelectedClipIds([clip.id]);
+                                 setSelectedAssetId(null);
+                                 setSelectedAudioClipId(null);
                                  setActiveTab("adjust");
-                                 setClipDragState({ clipId: clip.id, type: 'trimEnd', startX: e.clientX, initialStart: clip.startTime, initialDuration: clip.duration, initialTrimStart: clip.trimStart || 0, initialTrimEnd: clip.trimEnd || clip.fileDuration, fileDuration: clip.fileDuration });
+                                 setClipDragState({ clipId: clip.id, type: 'trimEnd', startX: e.clientX, initialStart: clip.startTime, initialDuration: clip.duration, initialTrimStart: clip.trimStart || 0, initialTrimEnd: clip.trimEnd || clip.fileDuration, fileDuration: clip.fileDuration, initialTotalDuration: totalDuration || 1 });
                                }}
                           />
                           
@@ -6063,15 +7747,15 @@ export default function VideoEditorPage() {
 
                           {/* Fade Handles */}
                           <div className="absolute left-0 top-0 w-3 h-3 cursor-ew-resize hover:scale-150 transition-transform bg-white border border-black shadow-sm rounded-br-full z-30 opacity-0 group-hover:opacity-100"
-                               onMouseDown={(e) => { e.stopPropagation(); setFadeDragState({ clipId: clip.id, type: 'fadeIn', startX: e.clientX, initialFade: clip.fadeInDuration || 0 }); }} />
+                               onMouseDown={(e) => { e.stopPropagation(); setFadeDragState({ clipId: clip.id, type: 'fadeIn', startX: e.clientX, initialFade: clip.fadeInDuration || 0, initialTotalDuration: totalDuration || 1 }); }} />
                           <div className="absolute right-0 top-0 w-3 h-3 cursor-ew-resize hover:scale-150 transition-transform bg-white border border-black shadow-sm rounded-bl-full z-30 opacity-0 group-hover:opacity-100"
-                               onMouseDown={(e) => { e.stopPropagation(); setFadeDragState({ clipId: clip.id, type: 'fadeOut', startX: e.clientX, initialFade: clip.fadeOutDuration || 0 }); }} />
+                               onMouseDown={(e) => { e.stopPropagation(); setFadeDragState({ clipId: clip.id, type: 'fadeOut', startX: e.clientX, initialFade: clip.fadeOutDuration || 0, initialTotalDuration: totalDuration || 1 }); }} />
 
                           <span className={`text-[10px] font-medium truncate pointer-events-none z-10 ${isSelected ? 'text-indigo-200' : 'text-zinc-300'}`}>{clip.name}</span>
                           <span className="text-[10px] text-zinc-500 ml-auto shrink-0 pointer-events-none z-10">{clip.duration ? `${clip.duration.toFixed(1)}s` : "…"}</span>
                           
                           <button 
-                            onClick={(e) => { e.stopPropagation(); setSelectedClipId(clip.id); deleteClip(clip.id); }} 
+                            onClick={(e) => { e.stopPropagation(); setSelectedClipIds([clip.id]); deleteClip(clip.id); }} 
                             className="absolute top-1 right-1 w-4 h-4 rounded hover:bg-red-600 text-zinc-400 hover:text-white flex items-center justify-center transition-colors shrink-0 z-20"
                           >
                             <X className="w-2.5 h-2.5" />
@@ -6096,13 +7780,115 @@ export default function VideoEditorPage() {
                 <span className="text-[9px] text-emerald-400 font-bold">AUD</span>
               </div>
               <div className="flex-1 relative overflow-hidden p-1">
-                {audioUrl ? (
-                  <div className="absolute inset-1 bg-emerald-500/20 border border-emerald-500/40 rounded-md flex items-center px-2 gap-2">
-                    <span className="text-xs font-medium text-emerald-300 truncate flex-1">Audio Track</span>
-                    <button onClick={() => setAudioUrl(null)} className="w-5 h-5 rounded bg-zinc-800 hover:bg-red-600 text-zinc-400 hover:text-white flex items-center justify-center transition-colors shrink-0" title="Remove audio">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
+                {audioClips.length > 0 ? (
+                  <>
+                    {audioClips.map(audio => {
+                       const isSelected = selectedAudioClipId === audio.id;
+                       return (
+                         <div 
+                           key={audio.id}
+                           className={`absolute top-1 bottom-1 rounded-md flex items-center px-1.5 cursor-move transition-all shadow-sm z-10 ${isSelected ? 'bg-emerald-800 border-2 border-emerald-400 ring-4 ring-emerald-500/30' : 'bg-emerald-900 border border-emerald-500 hover:bg-emerald-800 ring-1 ring-emerald-400'}`}
+                           style={{
+                              left: `${(audio.startTime / (totalDuration || 1)) * 100}%`,
+                              width: `${(audio.duration / (totalDuration || 1)) * 100}%`,
+                              minWidth: '40px'
+                           }}
+                           onMouseDown={(e) => {
+                               e.stopPropagation();
+                               setSelectedAudioClipId(audio.id);
+                               setSelectedClipIds([]);
+                               setSelectedAssetId(null);
+                               fabricCanvasRef.current?.discardActiveObject();
+                               fabricCanvasRef.current?.renderAll();
+                               const type = e.shiftKey ? 'slip' : 'move';
+                               setAudioDragState({
+                                   clipId: audio.id,
+                                   type: type,
+                                   startX: e.clientX,
+                                   initialStart: audio.startTime,
+                                   initialDuration: audio.duration,
+                                   initialTrimStart: audio.trimStart,
+                                   initialTrimEnd: audio.trimEnd,
+                                   fileDuration: audio.fileDuration,
+                                   initialTotalDuration: totalDuration || 1
+                               });
+                           }}
+                         >
+                           <div className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-emerald-400/50 rounded-l-md z-20"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  setAudioDragState({ clipId: audio.id, type: 'trimStart', startX: e.clientX, initialStart: audio.startTime, initialDuration: audio.duration, initialTrimStart: audio.trimStart, initialTrimEnd: audio.trimEnd, fileDuration: audio.fileDuration, initialTotalDuration: totalDuration || 1 });
+                                }}
+                           />
+                           <div className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-emerald-400/50 rounded-r-md z-20"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  setAudioDragState({ clipId: audio.id, type: 'trimEnd', startX: e.clientX, initialStart: audio.startTime, initialDuration: audio.duration, initialTrimStart: audio.trimStart, initialTrimEnd: audio.trimEnd, fileDuration: audio.fileDuration, initialTotalDuration: totalDuration || 1 });
+                                }}
+                           />
+                           <span className="text-xs font-medium text-emerald-300 truncate flex-1 pointer-events-none px-2 z-10">
+                               {audioDragState?.clipId === audio.id && audioDragState?.type === 'slip' ? `Slip: ${audio.trimStart.toFixed(2)}s` : audio.name || 'Audio Track'}
+                           </span>
+                           {globalTime > audio.startTime + 0.1 && globalTime < audio.startTime + audio.duration - 0.1 && (
+                              <div className="flex items-center gap-1 mr-2 z-20">
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const offset = globalTime - audio.startTime;
+                                    setAudioClips(prev => prev.map(c => {
+                                       if (c.id !== audio.id) return c;
+                                       return { ...c, startTime: globalTime, trimStart: c.trimStart + offset, duration: c.duration - offset };
+                                    }));
+                                    showToast("Audio start trimmed to playhead", "success");
+                                  }}
+                                  className="w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-all" 
+                                  title="Trim Start to Playhead (keeps right side)"
+                                >
+                                  <ArrowLeftToLine className="w-3.5 h-3.5" />
+                                </button>
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const newDur = globalTime - audio.startTime;
+                                    setAudioClips(prev => prev.map(c => {
+                                       if (c.id !== audio.id) return c;
+                                       return { ...c, trimEnd: c.trimStart + newDur, duration: newDur };
+                                    }));
+                                    showToast("Audio end trimmed to playhead", "success");
+                                  }}
+                                  className="w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-all" 
+                                  title="Trim End to Playhead (keeps left side)"
+                                >
+                                  <ArrowRightToLine className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                           )}
+                           <div className="flex items-center gap-1 z-20 relative mr-1">
+                              <button onClick={(e) => { 
+                                e.stopPropagation(); 
+                                if (customAudios.some(a => a.url === audio.url)) {
+                                  showToast("This audio clip is already in your library", "info");
+                                  return;
+                                }
+                                const newAudio = { id: crypto.randomUUID(), url: audio.url, name: audio.name || "Saved Audio", artist: "Custom" };
+                                const newAudios = [...customAudios, newAudio];
+                                setCustomAudios(newAudios);
+                                localStorage.setItem("custom_video_audios", JSON.stringify(newAudios));
+                                showToast("Saved to Audio Library", "success");
+                              }} className="w-5 h-5 rounded hover:bg-emerald-600/30 text-zinc-400 hover:text-emerald-400 flex items-center justify-center transition-colors shrink-0" title="Save to Library">
+                                <Save className="w-3 h-3" />
+                              </button>
+                             <button onClick={(e) => { e.stopPropagation(); setAudioClips(prev => prev.map(c => c.id === audio.id ? { ...c, isMuted: !c.isMuted } : c)); }} className="w-5 h-5 rounded hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center transition-colors shrink-0" title={audio.isMuted ? "Unmute audio" : "Mute audio"}>
+                               {audio.isMuted ? <VolumeX className="w-3 h-3 text-red-400" /> : <Volume2 className="w-3 h-3" />}
+                             </button>
+                             <button onClick={(e) => { e.stopPropagation(); setAudioClips(prev => prev.filter(c => c.id !== audio.id)); if (selectedAudioClipId === audio.id) setSelectedAudioClipId(null); }} className="w-5 h-5 rounded hover:bg-red-600 text-zinc-400 hover:text-white flex items-center justify-center transition-colors shrink-0" title="Remove audio">
+                               <X className="w-3 h-3" />
+                             </button>
+                           </div>
+                         </div>
+                       );
+                    })}
+                  </>
                 ) : (
                   <div className="w-full h-full border border-dashed border-zinc-800 rounded-md flex items-center justify-center opacity-50 cursor-pointer" onClick={() => audioInputRef.current?.click()}>
                     <span className="text-[10px] text-zinc-500 font-medium">+ Add Audio</span>
@@ -6128,13 +7914,23 @@ export default function VideoEditorPage() {
                       key={asset.id} 
                       onMouseDown={(e) => {
                         e.stopPropagation();
+                        setSelectedClipIds([]);
+                        setSelectedAudioClipId(null);
                         setSelectedAssetId(asset.id);
                         setActiveTab("adjust");
                         if (asset.obj) {
                           fabricCanvasRef.current?.setActiveObject(asset.obj);
                           setSelectedObj(asset.obj);
+                          if (asset.id.startsWith("shp-")) setLeftPanel("shapes");
+                          else if (asset.id.startsWith("txt-")) setLeftPanel("text");
+                          else if (asset.id.startsWith("stk-")) setLeftPanel("stickers");
+                          else if (asset.id.startsWith("img-")) setLeftPanel("logo");
                         }
-                        fabricCanvasRef.current?.renderAll();
+                        if (globalTime < asset.startTime || globalTime > asset.endTime) {
+                          handleSeek({ target: { value: asset.startTime.toString() } } as any);
+                        } else {
+                          fabricCanvasRef.current?.renderAll();
+                        }
                         setAssetDragState({
                           assetId: asset.id,
                           type: 'move',
@@ -6150,12 +7946,18 @@ export default function VideoEditorPage() {
                       <div 
                         onMouseDown={(e) => {
                           e.stopPropagation();
+                          setSelectedClipIds([]);
+                          setSelectedAudioClipId(null);
                           setSelectedAssetId(asset.id);
                           if (asset.obj) {
                             fabricCanvasRef.current?.setActiveObject(asset.obj);
                             setSelectedObj(asset.obj);
                           }
-                          fabricCanvasRef.current?.renderAll();
+                          if (globalTime < asset.startTime || globalTime > asset.endTime) {
+                            handleSeek({ target: { value: asset.startTime.toString() } } as any);
+                          } else {
+                            fabricCanvasRef.current?.renderAll();
+                          }
                           setAssetDragState({ assetId: asset.id, type: 'trimStart', startX: e.clientX, initialStart: asset.startTime, initialEnd: asset.endTime });
                         }}
                         className={`absolute left-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-amber-400/50 rounded-l-md ${isSelected ? 'bg-amber-400/30' : 'bg-zinc-600/50 opacity-0 group-hover:opacity-100'}`}
@@ -6181,10 +7983,17 @@ export default function VideoEditorPage() {
                       <div 
                         onMouseDown={(e) => {
                           e.stopPropagation();
+                          setSelectedClipIds([]);
+                          setSelectedAudioClipId(null);
                           setSelectedAssetId(asset.id);
                           if (asset.obj) {
                             fabricCanvasRef.current?.setActiveObject(asset.obj);
                             setSelectedObj(asset.obj);
+                          }
+                          if (globalTime < asset.startTime || globalTime > asset.endTime) {
+                            handleSeek({ target: { value: asset.endTime.toString() } } as any);
+                          } else {
+                            fabricCanvasRef.current?.renderAll();
                           }
                           setAssetDragState({ assetId: asset.id, type: 'trimEnd', startX: e.clientX, initialStart: asset.startTime, initialEnd: asset.endTime });
                         }}

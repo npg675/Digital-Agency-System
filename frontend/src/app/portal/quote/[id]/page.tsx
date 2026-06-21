@@ -194,14 +194,14 @@ export default function PublicQuotationPage() {
           {/* --- Premium Header Section (Letterhead Style) --- */}
           <div className="flex justify-between items-center border-b border-gray-200 pb-4 mb-4 relative">
             {/* Left Side: Logo */}
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 mt-3">
               {quotation.agency?.branding_logo || cust.logo_url ? (
-                <div className="flex items-center justify-center h-16">
-                  <img src={quotation.agency?.branding_logo || cust.logo_url} alt="Company Logo" className="h-16 w-auto max-w-[220px] object-contain drop-shadow-sm" />
+                <div className="flex items-center justify-center h-24">
+                  <img src={quotation.agency?.branding_logo || cust.logo_url} alt="Company Logo" className="h-24 w-auto max-w-[320px] object-contain drop-shadow-sm" />
                 </div>
               ) : (
-                <div className="bg-gradient-to-tr from-purple-600 to-indigo-600 h-16 w-16 rounded-xl flex items-center justify-center shadow-md">
-                  <span className="text-white font-black text-2xl tracking-tighter">
+                <div className="bg-gradient-to-tr from-purple-600 to-indigo-600 h-24 w-24 rounded-xl flex items-center justify-center shadow-md">
+                  <span className="text-white font-black text-4xl tracking-tighter">
                     {(quotation.agency?.agency_name || "LF").substring(0, 2).toUpperCase()}
                   </span>
                 </div>
@@ -364,12 +364,12 @@ export default function PublicQuotationPage() {
               {(!quotation.agency?.hide_agency_signature || !quotation.agency?.hide_agency_signature_text) && (
                 <div className="mt-8 flex flex-col items-center opacity-80 w-full">
                   {/* Signature Space / Image */}
-                  <div className="h-16 w-full flex items-end justify-center pb-1 relative">
+                  <div className="h-24 w-full flex items-end justify-center pb-1 relative">
                     {!quotation.agency?.hide_agency_signature && quotation.agency?.agency_signature && (
                       <img 
                         src={quotation.agency.agency_signature} 
                         alt="Authorized Signature" 
-                        className="max-h-20 max-w-[150%] w-auto object-contain absolute bottom-0 mix-blend-multiply"
+                        className="max-h-32 max-w-[200%] w-auto object-contain absolute bottom-[-16px] mix-blend-multiply"
                       />
                     )}
                   </div>

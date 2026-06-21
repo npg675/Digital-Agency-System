@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Loader2, TrendingUp, PlayCircle, Clock, MousePointerClick, BrainCircuit, Sparkles, Award } from "lucide-react";
+import { Loader2, TrendingUp, PlayCircle, Clock, MousePointerClick, BrainCircuit, Sparkles, Award, Search, ArrowUpRight } from "lucide-react";
 import { FaFacebook, FaInstagram, FaLinkedin, FaTwitter, FaTiktok, FaYoutube } from "react-icons/fa";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -115,6 +115,63 @@ export default function AnalyticsDashboard() {
           <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 text-green-600 dark:text-green-400">
             {overview?.engagement_rate}
           </p>
+        </div>
+      </div>
+
+      {/* Mock SEO / Organic Performance (Phase 1) */}
+      <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
+              <Search className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Organic Search Performance</h2>
+              <p className="text-xs text-zinc-500">Google Search Console & GA4 Integration (Preview)</p>
+            </div>
+          </div>
+          <span className="px-3 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-xs font-semibold rounded-full border border-zinc-200 dark:border-zinc-700">
+            Last 30 Days
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800/50">
+            <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Organic Clicks</p>
+            <div className="flex items-end justify-between">
+              <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">12,450</p>
+              <span className="flex items-center text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1">
+                <ArrowUpRight className="w-3 h-3 mr-0.5" /> +14.2%
+              </span>
+            </div>
+          </div>
+          <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800/50">
+            <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Impressions</p>
+            <div className="flex items-end justify-between">
+              <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">245.2K</p>
+              <span className="flex items-center text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1">
+                <ArrowUpRight className="w-3 h-3 mr-0.5" /> +28.4%
+              </span>
+            </div>
+          </div>
+          <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800/50">
+            <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Average Position</p>
+            <div className="flex items-end justify-between">
+              <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">8.4</p>
+              <span className="flex items-center text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1">
+                <ArrowUpRight className="w-3 h-3 mr-0.5" /> +1.2
+              </span>
+            </div>
+          </div>
+          <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800/50">
+            <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Average CTR</p>
+            <div className="flex items-end justify-between">
+              <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">5.1%</p>
+              <span className="flex items-center text-xs font-medium text-zinc-400 mb-1">
+                -0.2%
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 

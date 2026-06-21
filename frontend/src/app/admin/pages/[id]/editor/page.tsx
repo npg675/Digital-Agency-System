@@ -6,11 +6,12 @@ import { useEditorStore } from "@/store/useEditorStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, Globe, EyeOff, CheckCircle2, Loader2, Settings, CopyPlus, Menu, Split, Images } from "lucide-react";
+import { ArrowLeft, Save, Globe, EyeOff, CheckCircle2, Loader2, Settings, CopyPlus, Menu, Split, Images, Search } from "lucide-react";
 import Link from "next/link";
 import { PageSettingsModal } from "@/components/editor/PageSettingsModal";
 import { ABTestingModal } from "@/components/editor/ABTestingModal";
 import { MediaLibraryDrawer } from "@/components/editor/MediaLibraryDrawer";
+import { SEOAnalyzerDrawer } from "@/components/editor/SEOAnalyzerDrawer";
 import { AssetShelf } from "@/components/editor/AssetShelf";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -33,6 +34,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isMediaLibraryOpen, setIsMediaLibraryOpen] = useState(false);
+  const [isSEOAnalyzerOpen, setIsSEOAnalyzerOpen] = useState(false);
 
   // Fetch page data on mount
   useEffect(() => {
@@ -267,6 +269,14 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
             <Images className="w-3.5 h-3.5" /> Media Library
           </button>
           
+          {/* SEO Analyzer Toggle */}
+          <button
+            onClick={() => setIsSEOAnalyzerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-orange-500/50 text-orange-400 hover:bg-orange-500/10 transition-colors"
+          >
+            <Search className="w-3.5 h-3.5" /> SEO Check
+          </button>
+          
           {/* Gallery Background Toggle — shows only when a Gallery section is active */}
           {(() => {
             const activeSection = sections.find(s => s.id === activeSectionId);
@@ -332,6 +342,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       <PageSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       <ABTestingModal isOpen={isABTestingOpen} onClose={() => setIsABTestingOpen(false)} pageId={id} />
       <MediaLibraryDrawer isOpen={isMediaLibraryOpen} onClose={() => setIsMediaLibraryOpen(false)} />
+      <SEOAnalyzerDrawer isOpen={isSEOAnalyzerOpen} onClose={() => setIsSEOAnalyzerOpen(false)} />
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { useCrossTabSync } from "@/store/useSyncStore";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { LayoutDashboard, FileText, Settings, LogOut, Copy, Users, BarChart2, Menu, X, Bell, Activity, CheckCircle2, Clock, ListTree, Calendar, CreditCard, Megaphone, MessageSquare, Share2, Star, Route, Zap, GraduationCap, Pin, PinOff, Video, Film, Lightbulb, Target, Search, Edit2 } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, LogOut, Copy, Users, BarChart2, Menu, X, Bell, Activity, CheckCircle2, Clock, ListTree, Calendar, CreditCard, Megaphone, MessageSquare, Share2, Star, Route, Zap, GraduationCap, Pin, PinOff, Video, Film, Lightbulb, Target, Search, Edit2, Globe, MapPin, Network } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PlaybookBackButton } from "@/components/PlaybookBackButton";
 
@@ -277,6 +277,18 @@ export default function AdminLayout({
           <Link href="/admin/competitors" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors">
             <Search className="w-5 h-5 text-indigo-500" />
             Competitor Recon
+          </Link>
+          <Link href="/admin/seo-audits" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors">
+            <Globe className="w-5 h-5 text-teal-500" />
+            Technical SEO Audits
+          </Link>
+          <Link href="/admin/local-seo" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors">
+            <MapPin className="w-5 h-5 text-red-500" />
+            Local SEO & GMB
+          </Link>
+          <Link href="/admin/content-strategy" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors">
+            <Network className="w-5 h-5 text-fuchsia-500" />
+            AI Content Strategy
           </Link>
           <Link href="/admin/prospector" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors">
             <Activity className="w-5 h-5 text-emerald-500" />

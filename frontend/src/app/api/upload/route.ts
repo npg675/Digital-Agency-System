@@ -29,8 +29,43 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const uniqueFilename = `${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    let buffer = Buffer.from(await file.arrayBuffer());
+    let filename = file.name;
+    let mimeType = file.type;
+
+    const isMov = filename.toLowerCase().endsWith('.mov') || mimeType === 'video/quicktime';
+
+    if (isMov) {
+      console.log(`[upload] Detected MOV file: ${filename}. Transcoding to MP4...`);
+      try {
+        const backendFormData = new FormData();
+        const fileBlob = new Blob([buffer], { type: mimeType });
+        backendFormData.append('file', fileBlob, filename);
+
+        const transcodeRes = await fetch(`${API_BASE}/video-editor/transcode`, {
+          method: 'POST',
+          body: backendFormData,
+        });
+
+        if (!transcodeRes.ok) {
+          const errMsg = await transcodeRes.text();
+          throw new Error(`Backend transcode failed: ${errMsg}`);
+        }
+
+        buffer = Buffer.from(await transcodeRes.arrayBuffer());
+        filename = filename.replace(/\.[^.]+$/, '.mp4');
+        if (!filename.endsWith('.mp4')) {
+          filename += '.mp4';
+        }
+        mimeType = 'video/mp4';
+        console.log(`[upload] Transcoding successful. Updated filename to ${filename}`);
+      } catch (err: any) {
+        console.error('[upload] Transcoding error:', err);
+        return NextResponse.json({ error: `Transcoding failed: ${err.message}` }, { status: 500 });
+      }
+    }
+
+    const uniqueFilename = `${crypto.randomUUID()}-${filename.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
     // Fetch storage settings from database (via backend API)
     const authHeader = request.headers.get('Authorization');
@@ -78,7 +113,7 @@ export async function POST(request: Request) {
 
         const response = await drive.files.create({
           requestBody: { name: uniqueFilename, parents: [gDriveFolderId] },
-          media: { mimeType: file.type, body: stream },
+          media: { mimeType: mimeType, body: stream },
           fields: 'id, webContentLink',
         });
 

@@ -20,6 +20,7 @@ export interface PageSettings {
   seo_title?: string | null;
   seo_description?: string | null;
   meta_keywords?: string | null;
+  target_keyword?: string | null;
   client_id?: string | null;
   campaign_id?: string | null;
   client_phone?: string | null;

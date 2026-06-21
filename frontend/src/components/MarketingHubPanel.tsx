@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Copy, Megaphone, Mail, ArrowRight, CheckCircle2, Lightbulb, Target, Rocket, Users, FileText, BarChart, BookOpen, Key, Settings, ListTree, CreditCard, LayoutDashboard, Calendar, Activity, Bell, Star, Filter, Zap, GraduationCap, Cloud, Image as ImageIcon, HardDrive, SplitSquareVertical, Globe, Search, Sparkles, X, Loader2, Share2, Route, MessageSquare } from "lucide-react";
+import { Copy, Megaphone, Mail, ArrowRight, CheckCircle2, Lightbulb, Target, Rocket, Users, FileText, BarChart, BookOpen, Key, Settings, ListTree, CreditCard, LayoutDashboard, Calendar, Activity, Bell, Star, Filter, Zap, GraduationCap, Cloud, Image as ImageIcon, HardDrive, SplitSquareVertical, Globe, Search, Sparkles, X, Loader2, Share2, Route, MessageSquare, MapPin, Network } from "lucide-react";
 import Link from "next/link";
 
 interface SequenceStep {
@@ -756,6 +756,45 @@ export function MarketingHubPanel({ isPanelMode = false }: MarketingHubPanelProp
                       <div className="p-2 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-md"><BarChart className="w-4 h-4" /></div>
                       <div>
                         <h4 className="font-bold text-sm text-zinc-900 dark:text-white">Reports</h4>
+                      </div>
+                    </div>
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 10: SEO & Traffic Growth */}
+            <div className="relative mt-8">
+              <div className="absolute -left-[17px] md:-left-[21px] top-0 w-8 h-8 md:w-10 md:h-10 bg-teal-100 dark:bg-teal-900/50 rounded-full flex items-center justify-center border-4 border-white dark:border-zinc-950 z-10 text-teal-600 dark:text-teal-400 font-bold text-sm md:text-base">
+                10
+              </div>
+              <div className="pl-6 md:pl-8">
+                <h3 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2 mb-2">
+                  <Globe className="w-5 h-5 text-teal-500" /> SEO & Traffic Growth
+                </h3>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">Run technical audits, track local Google Business rankings, and scale with AI content clusters.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <Link href="/admin/seo-audits?from=playbook" className="flex items-center justify-between p-4 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm hover:border-teal-300 dark:hover:border-teal-700 transition-all group">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-md"><Globe className="w-4 h-4" /></div>
+                      <div>
+                        <h4 className="font-bold text-sm text-zinc-900 dark:text-white">SEO Audits</h4>
+                      </div>
+                    </div>
+                  </Link>
+                  <Link href="/admin/local-seo?from=playbook" className="flex items-center justify-between p-4 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm hover:border-teal-300 dark:hover:border-teal-700 transition-all group">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-md"><MapPin className="w-4 h-4" /></div>
+                      <div>
+                        <h4 className="font-bold text-sm text-zinc-900 dark:text-white">Local Grid Tracker</h4>
+                      </div>
+                    </div>
+                  </Link>
+                  <Link href="/admin/content-strategy?from=playbook" className="flex items-center justify-between p-4 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm hover:border-teal-300 dark:hover:border-teal-700 transition-all group">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-md"><Network className="w-4 h-4" /></div>
+                      <div>
+                        <h4 className="font-bold text-sm text-zinc-900 dark:text-white">Content Strategy</h4>
                       </div>
                     </div>
                   </Link>

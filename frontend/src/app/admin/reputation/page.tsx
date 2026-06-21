@@ -11,6 +11,7 @@ export default function ReputationPage() {
   const { user, token } = useAuthStore();
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'requests' | 'inbox'>('requests');
   
   const [showSendModal, setShowSendModal] = useState(false);
   const [newRequest, setNewRequest] = useState({ customer_name: "", customer_contact: "" });
@@ -94,7 +95,7 @@ export default function ReputationPage() {
         </div>
       </div>
 
-      {!user?.brand_google_review_url && user?.role === 'CLIENT' && (
+      {!user?.brand_google_review_url && user?.role === 'CLIENT' && activeTab === 'requests' && (
         <div className="mb-8 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 flex gap-3 text-amber-800 dark:text-amber-200">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <div>
@@ -104,7 +105,34 @@ export default function ReputationPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      {/* Tabs */}
+      <div className="flex gap-4 border-b border-zinc-200 dark:border-zinc-800 mb-8">
+        <button
+          onClick={() => setActiveTab('requests')}
+          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${
+            activeTab === 'requests' 
+              ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' 
+              : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
+          }`}
+        >
+          Review Requests Campaign
+        </button>
+        <button
+          onClick={() => setActiveTab('inbox')}
+          className={`pb-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === 'inbox' 
+              ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' 
+              : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
+          }`}
+        >
+          Live Review Inbox
+          <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 py-0.5 px-2 rounded-full text-[10px]">3 New</span>
+        </button>
+      </div>
+
+      {activeTab === 'requests' ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm">
           <h3 className="text-sm font-medium text-zinc-500 mb-2">Average Rating</h3>
           <div className="flex items-end gap-2">
@@ -201,6 +229,75 @@ export default function ReputationPage() {
           </tbody>
         </table>
       </div>
+        </>
+      ) : (
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-sm">
+          <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 flex justify-between items-center">
+            <h3 className="font-bold text-zinc-900 dark:text-zinc-100">Live Reviews from Google & Yelp</h3>
+            <span className="text-sm text-zinc-500">Auto-syncs every hour</span>
+          </div>
+          <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            {/* Mock Review 1 */}
+            <div className="p-6 hover:bg-zinc-50 dark:hover:bg-zinc-800/20 transition-colors flex gap-4">
+              <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold shrink-0">
+                G
+              </div>
+              <div className="flex-1">
+                <div className="flex justify-between items-start mb-1">
+                  <div>
+                    <h4 className="font-bold text-zinc-900 dark:text-zinc-100">Sarah Jenkins</h4>
+                    <div className="flex gap-1 text-amber-400 mb-2 mt-1">
+                      <Star className="w-4 h-4 fill-current" />
+                      <Star className="w-4 h-4 fill-current" />
+                      <Star className="w-4 h-4 fill-current" />
+                      <Star className="w-4 h-4 fill-current" />
+                      <Star className="w-4 h-4 fill-current" />
+                    </div>
+                  </div>
+                  <span className="text-xs text-zinc-500">2 hours ago via Google</span>
+                </div>
+                <p className="text-zinc-700 dark:text-zinc-300 text-sm mb-4">
+                  "Absolutely amazing service! The team was on time, professional, and explained everything clearly. Would highly recommend."
+                </p>
+                <div className="flex gap-2">
+                  <Input placeholder="Write a public reply..." className="h-9 text-sm" />
+                  <Button size="sm" className="h-9 shrink-0">Reply</Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Mock Review 2 */}
+            <div className="p-6 hover:bg-zinc-50 dark:hover:bg-zinc-800/20 transition-colors flex gap-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold shrink-0">
+                Y
+              </div>
+              <div className="flex-1">
+                <div className="flex justify-between items-start mb-1">
+                  <div>
+                    <h4 className="font-bold text-zinc-900 dark:text-zinc-100">Mike R.</h4>
+                    <div className="flex gap-1 text-amber-400 mb-2 mt-1">
+                      <Star className="w-4 h-4 fill-current" />
+                      <Star className="w-4 h-4 text-zinc-300" />
+                      <Star className="w-4 h-4 text-zinc-300" />
+                      <Star className="w-4 h-4 text-zinc-300" />
+                      <Star className="w-4 h-4 text-zinc-300" />
+                    </div>
+                  </div>
+                  <span className="text-xs text-zinc-500">1 day ago via Yelp</span>
+                </div>
+                <p className="text-zinc-700 dark:text-zinc-300 text-sm mb-4">
+                  "They showed up late and the pricing was higher than what was quoted over the phone. Not happy."
+                </p>
+                <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3">
+                  <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 mb-1">Your Reply</p>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">"Hi Mike, we apologize for the delay. Please contact our office at 555-0123 so we can make this right and adjust the invoice to match the original quote."</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {showSendModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">

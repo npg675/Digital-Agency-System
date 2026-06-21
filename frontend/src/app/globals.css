@@ -166,3 +166,13 @@
     scrollbar-width: thin;
   }
 }
+
+/* Responsive Fabric.js Canvas Container */
+.canvas-container {
+  width: 100% !important;
+  height: 100% !important;
+}
+.upper-canvas, .lower-canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
