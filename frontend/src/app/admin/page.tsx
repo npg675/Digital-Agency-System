@@ -2,7 +2,7 @@
 
 import { useAuthStore } from "@/store/useAuthStore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Users, FileText, Activity, Eye, Loader2, Globe, Clock, ArrowRight, MessageSquare, Save, X, CalendarPlus } from "lucide-react";
+import { Users, FileText, Activity, Eye, Loader2, Globe, Clock, ArrowRight, MessageSquare, Save, X, CalendarPlus, Bookmark, Trash2, Plus, ExternalLink, Search, Edit2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Textarea } from "@/components/ui/textarea";
@@ -51,6 +51,369 @@ interface ComprehensiveData {
     leads: number;
     cvr: number;
   };
+}
+
+function QuickLinksDropdown() {
+  const { token, user } = useAuthStore();
+  const [isOpen, setIsOpen] = useState(false);
+  const [links, setLinks] = useState<{id: string, name: string, url: string, category?: string, is_shared_with_staff: boolean, user_id: string}[]>([]);
+  const [isAdding, setIsAdding] = useState(false);
+  const [newLinkName, setNewLinkName] = useState("");
+  const [newLinkUrl, setNewLinkUrl] = useState("");
+  const [newLinkCategory, setNewLinkCategory] = useState("");
+  const [shareWithStaff, setShareWithStaff] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
+  const [editLinkName, setEditLinkName] = useState("");
+  const [editLinkUrl, setEditLinkUrl] = useState("");
+  const [editLinkCategory, setEditLinkCategory] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const fetchLinks = async () => {
+    try {
+      const res = await fetch(`${API}/quick-links`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setLinks(await res.json());
+      }
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    if (token) fetchLinks();
+  }, [token]);
+
+  const handleAddLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newLinkName || !newLinkUrl) return;
+    
+    setLoading(true);
+    let finalUrl = newLinkUrl;
+    if (!/^https?:\/\//i.test(finalUrl)) {
+      finalUrl = `https://${finalUrl}`;
+    }
+
+    try {
+      const res = await fetch(`${API}/quick-links`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: newLinkName,
+          url: finalUrl,
+          category: newLinkCategory.trim() || undefined,
+          is_shared_with_staff: shareWithStaff
+        })
+      });
+      
+      if (res.ok) {
+        await fetchLinks();
+        setNewLinkName("");
+        setNewLinkUrl("");
+        setNewLinkCategory("");
+        setShareWithStaff(false);
+        setIsAdding(false);
+      } else {
+        alert("Failed to save link");
+      }
+    } catch (err) {
+      alert("Network error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API}/quick-links/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setLinks(links.filter(l => l.id !== id));
+      } else {
+        alert("Failed to delete link or permission denied");
+      }
+    } catch (_) {}
+  };
+
+  const toggleShare = async (e: React.MouseEvent, id: string, currentStatus: boolean) => {
+    e.stopPropagation();
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API}/quick-links/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ is_shared_with_staff: !currentStatus })
+      });
+      if (res.ok) {
+        setLinks(links.map(l => l.id === id ? { ...l, is_shared_with_staff: !currentStatus } : l));
+      } else {
+        alert("Failed to update visibility or permission denied");
+      }
+    } catch (_) {}
+  };
+
+  const startEditing = (e: React.MouseEvent, link: any) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setEditingLinkId(link.id);
+    setEditLinkName(link.name);
+    setEditLinkUrl(link.url);
+    setEditLinkCategory(link.category || "");
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent, id: string) => {
+    e.preventDefault();
+    if (!editLinkName || !editLinkUrl) return;
+    
+    setLoading(true);
+    let finalUrl = editLinkUrl;
+    if (!/^https?:\/\//i.test(finalUrl)) {
+      finalUrl = `https://${finalUrl}`;
+    }
+
+    try {
+      const res = await fetch(`${API}/quick-links/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: editLinkName,
+          url: finalUrl,
+          category: editLinkCategory.trim() || undefined
+        })
+      });
+      
+      if (res.ok) {
+        setLinks(links.map(l => l.id === id ? { ...l, name: editLinkName, url: finalUrl, category: editLinkCategory.trim() || undefined } : l));
+        setEditingLinkId(null);
+      } else {
+        alert("Failed to update link");
+      }
+    } catch (err) {
+      alert("Network error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  
+  return (
+    <div className="relative h-full">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 shadow-sm backdrop-blur-sm transition-all hover:bg-zinc-50 dark:hover:bg-zinc-900 text-zinc-600 dark:text-zinc-400 group h-full"
+        title="Quick Links"
+      >
+        <Bookmark className="w-4 h-4 group-hover:text-indigo-500 transition-colors" />
+        <span className="text-sm font-semibold tracking-tight group-hover:text-zinc-900 dark:group-hover:text-zinc-100 hidden sm:inline">Links</span>
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-zinc-950 rounded-2xl shadow-xl shadow-zinc-200/50 dark:shadow-black/50 border border-zinc-200 dark:border-zinc-800 z-50 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+            <div className="p-3 border-b border-zinc-100 dark:border-zinc-800/50 flex justify-between items-center bg-zinc-50/80 dark:bg-zinc-900/50 backdrop-blur-sm">
+              <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <Bookmark className="w-4 h-4 text-indigo-500" /> My Quick Links
+              </span>
+              <button 
+                onClick={() => setIsAdding(!isAdding)}
+                className="p-1 rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 transition-colors"
+                title={isAdding ? "Cancel" : "Add new link"}
+              >
+                {isAdding ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              </button>
+            </div>
+
+            {isAdding && (
+              <form onSubmit={handleAddLink} className="p-3 border-b border-zinc-100 dark:border-zinc-800/50 bg-indigo-50/30 dark:bg-indigo-950/20 space-y-2 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500" />
+                <Input 
+                  placeholder="Link Name (e.g., Canva)" 
+                  value={newLinkName}
+                  onChange={e => setNewLinkName(e.target.value)}
+                  className="h-8 text-xs bg-white dark:bg-zinc-900 focus-visible:ring-indigo-500"
+                  autoFocus
+                />
+                <Input 
+                  placeholder="URL (e.g., canva.com)" 
+                  value={newLinkUrl}
+                  onChange={e => setNewLinkUrl(e.target.value)}
+                  className="h-8 text-xs bg-white dark:bg-zinc-900 focus-visible:ring-indigo-500"
+                />
+                <Input 
+                  placeholder="Category (Optional, e.g., Design)" 
+                  value={newLinkCategory}
+                  onChange={e => setNewLinkCategory(e.target.value)}
+                  className="h-8 text-xs bg-white dark:bg-zinc-900 focus-visible:ring-indigo-500"
+                />
+                <div className="flex items-center gap-2 px-1 pt-1">
+                  <input 
+                    type="checkbox" 
+                    id="shareLink" 
+                    checked={shareWithStaff} 
+                    onChange={e => setShareWithStaff(e.target.checked)} 
+                    className="rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 w-3 h-3"
+                  />
+                  <label htmlFor="shareLink" className="text-[10px] font-medium text-zinc-600 dark:text-zinc-400 cursor-pointer">
+                    Share this link with all staff
+                  </label>
+                </div>
+                <button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium py-1.5 rounded-lg transition-colors mt-2 shadow-sm disabled:opacity-50">
+                  {loading ? "Saving..." : "Save Link"}
+                </button>
+              </form>
+            )}
+
+            {!isAdding && links.length > 0 && (
+              <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800/50 bg-white dark:bg-zinc-950">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+                  <Input 
+                    placeholder="Search links..." 
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="h-8 pl-8 text-xs bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 focus-visible:ring-indigo-500 w-full"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="max-h-64 overflow-y-auto p-2 space-y-1 sidebar-scroll">
+              {links.length === 0 && !isAdding ? (
+                <div className="text-center py-8 text-zinc-400 text-xs flex flex-col items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                    <Globe className="w-4 h-4 text-zinc-300 dark:text-zinc-600" />
+                  </div>
+                  <span>No links added yet.<br/>Click + to save a website.</span>
+                </div>
+              ) : (
+                links
+                  .filter(link => 
+                    link.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    link.url.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    (link.category && link.category.toLowerCase().includes(searchQuery.toLowerCase()))
+                  )
+                  .map(link => editingLinkId === link.id ? (
+                  <form key={link.id} onSubmit={(e) => handleEditSubmit(e, link.id)} className="p-3 mb-1 border border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/20 dark:bg-indigo-950/20 rounded-xl space-y-2 relative">
+                    <Input 
+                      placeholder="Link Name" 
+                      value={editLinkName}
+                      onChange={e => setEditLinkName(e.target.value)}
+                      className="h-8 text-xs bg-white dark:bg-zinc-900 focus-visible:ring-indigo-500"
+                      autoFocus
+                    />
+                    <Input 
+                      placeholder="URL" 
+                      value={editLinkUrl}
+                      onChange={e => setEditLinkUrl(e.target.value)}
+                      className="h-8 text-xs bg-white dark:bg-zinc-900 focus-visible:ring-indigo-500"
+                    />
+                    <Input 
+                      placeholder="Category" 
+                      value={editLinkCategory}
+                      onChange={e => setEditLinkCategory(e.target.value)}
+                      className="h-8 text-xs bg-white dark:bg-zinc-900 focus-visible:ring-indigo-500"
+                    />
+                    <div className="flex gap-2 pt-1">
+                      <button type="submit" disabled={loading} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium py-1.5 rounded-lg transition-colors shadow-sm disabled:opacity-50">
+                        {loading ? "..." : "Save"}
+                      </button>
+                      <button type="button" onClick={() => setEditingLinkId(null)} className="flex-1 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-medium py-1.5 rounded-lg transition-colors shadow-sm">
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <a 
+                    key={link.id}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-900 group transition-colors"
+                  >
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <div className="w-8 h-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0 border border-zinc-200/50 dark:border-zinc-700/50 group-hover:border-indigo-200 dark:group-hover:border-indigo-900 transition-colors">
+                        <img 
+                          src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(link.url)}&sz=64`} 
+                          alt=""
+                          className="w-4 h-4 opacity-70 group-hover:opacity-100 transition-opacity"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                        <Globe className="w-4 h-4 text-zinc-400 hidden" />
+                      </div>
+                      <div className="flex flex-col overflow-hidden">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm text-zinc-700 dark:text-zinc-300 font-medium truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                            {link.name}
+                          </span>
+                          {link.is_shared_with_staff && (
+                            <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0">
+                              Shared
+                            </span>
+                          )}
+                        </div>
+                        {link.category && (
+                          <span className="text-[10px] font-semibold tracking-wide text-zinc-400 dark:text-zinc-500 uppercase mt-0.5 truncate">
+                            {link.category}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      {(user?.role === 'ADMIN' || link.user_id === user?.id) && (
+                        <>
+                          <button 
+                            onClick={(e) => toggleShare(e, link.id, link.is_shared_with_staff)}
+                            className="p-1.5 text-zinc-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/50 rounded-md transition-colors"
+                            title={link.is_shared_with_staff ? "Hide from staff" : "Share with staff"}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            onClick={(e) => startEditing(e, link)}
+                            className="p-1.5 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-md transition-colors"
+                            title="Edit link"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            onClick={(e) => handleDelete(e, link.id)}
+                            className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-md transition-colors"
+                            title="Remove link"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                      <div className="p-1.5 text-zinc-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </div>
+                    </div>
+                  </a>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 function DateTimeCard() {
@@ -339,7 +702,10 @@ export default function AdminDashboard() {
             Welcome back, {user?.email || "Admin"}. Here's an overview of your agency.
           </p>
         </div>
-        <DateTimeCard />
+        <div className="flex items-center gap-2 h-[52px]">
+          <QuickLinksDropdown />
+          <DateTimeCard />
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">

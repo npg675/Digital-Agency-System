@@ -5,7 +5,7 @@ import { useCrossTabSync } from "@/store/useSyncStore";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { LayoutDashboard, FileText, Settings, LogOut, Copy, Users, BarChart2, Menu, X, Bell, Activity, CheckCircle2, Clock, ListTree, Calendar, CreditCard, Megaphone, MessageSquare, Share2, Star, Route, Zap, GraduationCap, Pin, PinOff, Video, Film, Lightbulb, Target, Search, Edit2, Globe, MapPin, Network } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, LogOut, Copy, Users, BarChart2, Menu, X, Bell, Activity, CheckCircle2, Clock, ListTree, Calendar, CreditCard, Megaphone, MessageSquare, Share2, Star, Route, Zap, GraduationCap, Pin, PinOff, Video, Film, Lightbulb, Target, Search, Edit2, Globe, MapPin, Network, StickyNote } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PlaybookBackButton } from "@/components/PlaybookBackButton";
 
@@ -121,6 +121,9 @@ export default function AdminLayout({
         if (res.ok) {
           const notifs = await res.json();
           setUnreadNotifications(notifs.filter((n: any) => !n.is_read).length);
+        } else if (res.status === 401 || res.status === 403) {
+          logout();
+          router.push("/admin/login");
         }
       } catch (err) {
         console.error(err);
@@ -174,6 +177,9 @@ export default function AdminLayout({
               </span>
             )}
           </Link>
+          <Link href="/admin/notes" className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors" title="My Notes">
+            <StickyNote className="w-5 h-5" />
+          </Link>
           <div className="scale-90 flex items-center"><ThemeToggle /></div>
           <button 
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -201,7 +207,7 @@ export default function AdminLayout({
       `}>
         <div className="py-2 px-4 border-b border-zinc-200 dark:border-zinc-800 hidden md:flex flex-col justify-center h-16 shrink-0 whitespace-nowrap relative">
           <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-2 overflow-hidden">
+            <div className="flex items-center gap-2 overflow-hidden shrink-0 min-w-[24px]">
               {agencyConfig?.branding_logo ? (
                 <img src={agencyConfig.branding_logo} alt="Logo" className="w-6 h-6 object-contain shrink-0 rounded" />
               ) : (
@@ -222,9 +228,9 @@ export default function AdminLayout({
               {isSidebarPinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
             </button>
           </div>
-          <div className={`flex items-center gap-1 w-full pl-8 mt-0.5 transition-opacity duration-200 ${isSidebarPinned ? "opacity-100" : "opacity-0 md:group-hover:opacity-100"}`}>
+          <div className={`flex items-center gap-2 w-full mt-1 transition-all duration-200 ${isSidebarPinned ? "pl-8" : "pl-0 justify-center md:group-hover:justify-start md:group-hover:pl-8"}`}>
             <Link href="/admin/notifications" className="relative text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors" title="Notifications">
-              <Bell className="w-3.5 h-3.5" />
+              <Bell className="w-4 h-4" />
               {unreadNotifications > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -232,7 +238,9 @@ export default function AdminLayout({
                 </span>
               )}
             </Link>
-            {/* Future notification icons can be added here seamlessly */}
+            <Link href="/admin/notes" className="relative text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors" title="My Notes">
+              <StickyNote className="w-4 h-4" />
+            </Link>
           </div>
         </div>
         
@@ -388,18 +396,6 @@ export default function AdminLayout({
               Activity Logs
             </Link>
           )}
-          
-          <Link href="/admin/notifications" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center justify-between px-3 py-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors">
-            <div className="flex items-center gap-3">
-              <Bell className="w-5 h-5" />
-              Notifications
-            </div>
-            {unreadNotifications > 0 && (
-              <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                {unreadNotifications}
-              </span>
-            )}
-          </Link>
         </nav>
 
         <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-start gap-4 overflow-hidden whitespace-nowrap [&_svg]:shrink-0">

@@ -27,3 +27,5 @@ from .social_post import SocialPost
 from .course import Course, CourseModule, CourseLesson, CourseEnrollment
 from .automation import Automation
 from .funnel import Funnel, FunnelStep
+from .personal_note import PersonalNote
+from .quick_link import QuickLink

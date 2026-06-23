@@ -151,6 +151,7 @@ export default function TemplatesList() {
     if (!newPageName.trim() || !newPageSlug.trim() || !selectedTemplateId) return;
     try {
       setIsCreating(true);
+      const campaignId = new URLSearchParams(window.location.search).get("campaign_id");
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/pages`, {
         method: "POST",
         headers: {
@@ -161,7 +162,8 @@ export default function TemplatesList() {
           name: newPageName,
           slug: newPageSlug,
           template_id: selectedTemplateId,
-          industry: newPageIndustry || undefined
+          industry: newPageIndustry || undefined,
+          campaign_id: campaignId || undefined
         })
       });
       if (res.ok) {

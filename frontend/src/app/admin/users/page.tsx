@@ -152,7 +152,7 @@ export default function UsersList() {
         role,
         first_name: firstName || undefined,
         last_name: lastName || undefined,
-        company_name: companyName || undefined,
+        company_name: role === 'CLIENT' ? (companyName || undefined) : undefined,
         phone_number: phoneNumber || undefined,
         address: address || undefined,
         can_manage_users: canManageUsers
@@ -326,6 +326,25 @@ export default function UsersList() {
                       Contact Only (No Login)
                     </button>
                   </div>
+                {creationMode === 'FULL' && (
+                  <div className="space-y-2 mb-4">
+                    <Label htmlFor="role">Role</Label>
+                    <select 
+                      id="role"
+                      className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-offset-zinc-950 dark:placeholder:text-zinc-400 dark:focus-visible:ring-zinc-300"
+                      value={role}
+                      onChange={(e) => setRole(e.target.value)}
+                    >
+                      <option value="CLIENT">CLIENT (View-only for assigned pages)</option>
+                      {currentUser?.role === 'ADMIN' && (
+                        <option value="STAFF">STAFF (Manage pages & templates)</option>
+                      )}
+                      {currentUser?.role === 'ADMIN' && (
+                        <option value="ADMIN">ADMIN (Full access)</option>
+                      )}
+                    </select>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="firstName">First Name</Label>
@@ -345,15 +364,17 @@ export default function UsersList() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="companyName">Company</Label>
-                    <Input 
-                      id="companyName" 
-                      value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
+                  {role === 'CLIENT' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="companyName">Company</Label>
+                      <Input 
+                        id="companyName" 
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  <div className={`space-y-2 ${role !== 'CLIENT' ? 'col-span-2' : ''}`}>
                     <Label htmlFor="phoneNumber">Phone Number</Label>
                     <Input 
                       id="phoneNumber" 
@@ -411,25 +432,7 @@ export default function UsersList() {
                   </div>
                 )}
 
-                {creationMode === 'FULL' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Role</Label>
-                    <select 
-                      id="role"
-                      className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-950 dark:ring-offset-zinc-950 dark:placeholder:text-zinc-400 dark:focus-visible:ring-zinc-300"
-                      value={role}
-                      onChange={(e) => setRole(e.target.value)}
-                    >
-                      <option value="CLIENT">CLIENT (View-only for assigned pages)</option>
-                      {currentUser?.role === 'ADMIN' && (
-                        <option value="STAFF">STAFF (Manage pages & templates)</option>
-                      )}
-                      {currentUser?.role === 'ADMIN' && (
-                        <option value="ADMIN">ADMIN (Full access)</option>
-                      )}
-                    </select>
-                  </div>
-                )}
+
 
                 {role === 'CLIENT' && currentUser?.role === 'ADMIN' && (
                   <div className="space-y-2">

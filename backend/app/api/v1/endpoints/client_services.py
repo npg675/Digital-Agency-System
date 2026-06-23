@@ -139,7 +139,6 @@ def add_specialist_to_squad(
     db.commit()
     db.refresh(service)
 
-    # Log Activity
     log_activity(
         db=db,
         user_id=current_user.id,
@@ -148,6 +147,16 @@ def add_specialist_to_squad(
         entity_id=str(service.id),
         details=f"Enrolled {staff.email} as '{payload.service_role}' for client {client.email}"
     )
+
+    if str(staff.id) != str(current_user.id):
+        from app.models.notification import Notification
+        db.add(Notification(
+            user_id=staff.id,
+            type="SQUAD_ENROLLED",
+            message=f"You have been added to the specialist squad as '{payload.service_role}' for client {client.first_name or client.email}.",
+            reference_id=str(client.id)
+        ))
+        db.commit()
 
     return {
         "id": service.id,

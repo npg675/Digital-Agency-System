@@ -53,6 +53,8 @@ interface EditorState {
   setActiveSection: (id: string | null) => void;
   setPageStatus: (status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED' | 'PENDING_APPROVAL') => void;
   setIsSaving: (v: boolean) => void;
+  hasUnsavedChanges: boolean;
+  setHasUnsavedChanges: (v: boolean) => void;
 }
 
 export const useEditorStore = create<EditorState>((set) => ({
@@ -64,14 +66,16 @@ export const useEditorStore = create<EditorState>((set) => ({
   sections: [],
   activeSectionId: null,
   isSaving: false,
+  hasUnsavedChanges: false,
 
   setPageId: (id) => set({ pageId: id }),
   setPageMeta: (name, slug, status) => set({ pageName: name, pageSlug: slug, pageStatus: status }),
-  setPageSettings: (settings) => set({ pageSettings: settings }),
+  setPageSettings: (settings) => set({ pageSettings: settings, hasUnsavedChanges: true }),
   setSections: (sections) => set({ sections: sections.sort((a, b) => a.order - b.order) }),
 
   addSection: (section) => set((state) => ({
-    sections: [...state.sections, section].map((s, i) => ({ ...s, order: i }))
+    sections: [...state.sections, section].map((s, i) => ({ ...s, order: i })),
+    hasUnsavedChanges: true
   })),
 
   duplicateSection: (id) => set((state) => {
@@ -85,26 +89,29 @@ export const useEditorStore = create<EditorState>((set) => ({
     };
     const newSections = [...state.sections];
     newSections.splice(idx + 1, 0, copy);
-    return { sections: newSections.map((s, i) => ({ ...s, order: i })) };
+    return { sections: newSections.map((s, i) => ({ ...s, order: i })), hasUnsavedChanges: true };
   }),
 
   updateSection: (id, config) => set((state) => ({
-    sections: state.sections.map((s) => s.id === id ? { ...s, config } : s)
+    sections: state.sections.map((s) => s.id === id ? { ...s, config } : s),
+    hasUnsavedChanges: true
   })),
 
   removeSection: (id) => set((state) => ({
     sections: state.sections.filter((s) => s.id !== id).map((s, i) => ({ ...s, order: i })),
     activeSectionId: state.activeSectionId === id ? null : state.activeSectionId,
+    hasUnsavedChanges: true
   })),
 
   reorderSections: (startIndex, endIndex) => set((state) => {
     const result = Array.from(state.sections);
     const [removed] = result.splice(startIndex, 1);
     result.splice(endIndex, 0, removed);
-    return { sections: result.map((s, i) => ({ ...s, order: i })) };
+    return { sections: result.map((s, i) => ({ ...s, order: i })), hasUnsavedChanges: true };
   }),
 
   setActiveSection: (id) => set({ activeSectionId: id }),
   setPageStatus: (status) => set({ pageStatus: status }),
   setIsSaving: (v) => set({ isSaving: v }),
+  setHasUnsavedChanges: (v) => set({ hasUnsavedChanges: v }),
 }));

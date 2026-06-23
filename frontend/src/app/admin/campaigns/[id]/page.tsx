@@ -200,9 +200,9 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Financials / ROI Calculator */}
-        <div className="bg-white p-6 rounded-xl border shadow-sm">
+        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold">Budget & ROI</h2>
+            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">Budget & ROI</h2>
             {user?.role !== "CLIENT" && (
               <Button onClick={handleSendReport} disabled={isSendingReport} size="sm" variant="outline" className="gap-2">
                 <Send className="w-4 h-4" /> {isSendingReport ? "Sending..." : "Send Report"}
@@ -227,16 +227,16 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
             </Button>
           </div>
 
-          <div className="mt-6 p-4 bg-indigo-50 rounded-lg">
-            <h3 className="text-sm font-semibold text-indigo-900 mb-2">Campaign Performance</h3>
+          <div className="mt-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+            <h3 className="text-sm font-semibold text-indigo-900 dark:text-indigo-300 mb-2">Campaign Performance</h3>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-xs text-indigo-700">Remaining Budget</p>
-                <p className="text-lg font-bold text-indigo-900">${Math.max(0, budget - adSpend).toFixed(2)}</p>
+                <p className="text-xs text-indigo-700 dark:text-indigo-400">Remaining Budget</p>
+                <p className="text-lg font-bold text-indigo-900 dark:text-indigo-100">${Math.max(0, budget - adSpend).toFixed(2)}</p>
               </div>
               <div>
-                <p className="text-xs text-indigo-700">ROI (Return on Investment)</p>
-                <p className="text-lg font-bold text-indigo-900">
+                <p className="text-xs text-indigo-700 dark:text-indigo-400">ROI (Return on Investment)</p>
+                <p className="text-lg font-bold text-indigo-900 dark:text-indigo-100">
                   {adSpend > 0 ? (((revenue - adSpend) / adSpend) * 100).toFixed(2) : "0"}%
                 </p>
               </div>
@@ -245,23 +245,23 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
         </div>
 
         {/* Tasks Checklist */}
-        <div className="bg-white p-6 rounded-xl border shadow-sm flex flex-col h-[500px]">
-          <h2 className="text-xl font-bold mb-4">Tasks & Checklist</h2>
+        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col h-[500px]">
+          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-4">Tasks & Checklist</h2>
           
           <div className="flex-1 overflow-y-auto space-y-2 mb-4 pr-2">
             {tasks.length === 0 ? (
               <p className="text-zinc-500 text-sm text-center py-8">No tasks added yet.</p>
             ) : (
               tasks.map(task => (
-                <div key={task.id} className="flex items-center gap-3 p-3 bg-zinc-50 border rounded-lg group">
+                <div key={task.id} className="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-lg group">
                   <button onClick={() => handleToggleTask(task)}>
                     {task.is_completed ? (
                       <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                     ) : (
-                      <Circle className="w-5 h-5 text-zinc-300 hover:text-indigo-500" />
+                      <Circle className="w-5 h-5 text-zinc-300 dark:text-zinc-600 hover:text-indigo-500" />
                     )}
                   </button>
-                  <span className={`flex-1 text-sm ${task.is_completed ? 'text-zinc-400 line-through' : 'text-zinc-700'}`}>
+                  <span className={`flex-1 text-sm ${task.is_completed ? 'text-zinc-400 dark:text-zinc-600 line-through' : 'text-zinc-700 dark:text-zinc-300'}`}>
                     {task.title}
                   </span>
                   <button onClick={() => handleDeleteTask(task.id)} className="opacity-0 group-hover:opacity-100 transition-opacity">
@@ -287,36 +287,36 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
       </div>
 
       {/* Attached Landing Pages */}
-      <div className="bg-white p-6 rounded-xl border shadow-sm">
+      <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Attached Landing Pages</h2>
+          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">Attached Landing Pages</h2>
           {user?.role !== "CLIENT" && (
-            <Button render={<Link href="/admin/templates" />} nativeButton={false} size="sm" variant="outline">
+            <Button render={<Link href={`/admin/templates?campaign_id=${campaign?.id}`} />} nativeButton={false} size="sm" variant="outline">
               <Plus className="w-4 h-4 mr-2" /> Create New
             </Button>
           )}
         </div>
         
         {pages.length === 0 ? (
-          <div className="text-center py-8 text-zinc-500 bg-zinc-50 rounded-lg border border-dashed">
+          <div className="text-center py-8 text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800/30 rounded-lg border border-dashed dark:border-zinc-800">
             No landing pages are attached to this campaign yet.
           </div>
         ) : (
-          <div className="border rounded-md overflow-hidden">
+          <div className="border border-zinc-200 dark:border-zinc-800 rounded-md overflow-hidden">
             <table className="w-full text-sm text-left">
-              <thead className="bg-zinc-50 border-b">
+              <thead className="bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800">
                 <tr>
-                  <th className="px-4 py-3 font-medium text-zinc-600">Page Name</th>
-                  <th className="px-4 py-3 font-medium text-zinc-600">Slug</th>
-                  <th className="px-4 py-3 font-medium text-zinc-600">Status</th>
-                  <th className="px-4 py-3 font-medium text-zinc-600">Action</th>
+                  <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Page Name</th>
+                  <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Slug</th>
+                  <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Status</th>
+                  <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                 {pages.map(page => (
-                  <tr key={page.id} className="hover:bg-zinc-50">
-                    <td className="px-4 py-3 font-medium">{page.name}</td>
-                    <td className="px-4 py-3 text-zinc-500">/{page.slug}</td>
+                  <tr key={page.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                    <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">{page.name}</td>
+                    <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">/{page.slug}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
                         page.status === 'PUBLISHED' 

@@ -11,7 +11,7 @@ import {
   Download, Loader2, ArrowLeft, Volume2, Save, Undo, Redo, Plus, Trash2,
   SlidersHorizontal, CloudUpload, HardDrive, Upload, Sparkles, X, Layers,
   Keyboard, Magnet, Undo2, Redo2, Eye, EyeOff, VolumeX, Link2, Rewind, FastForward, Wand2, PenTool, Shapes, Square, Circle, Triangle, Eraser, Printer, Maximize, Maximize2, MousePointer2, Crop as CropIcon, Settings,
-  Folder, FolderOpen, ChevronUp, ChevronRight, Film, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine, ListChecks, ArrowLeftToLine, ArrowRightToLine
+  Folder, FolderOpen, ChevronUp, ChevronRight, Film, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine, ListChecks, ArrowLeftToLine, ArrowRightToLine, AlignLeft, MousePointerSquareDashed
 } from "lucide-react";
 import ReactCrop, { type Crop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
@@ -82,6 +82,13 @@ type AudioClip = {
   isMuted?: boolean;    // Whether the clip is muted
 };
 
+export interface AnimationDef {
+  id: string;
+  type: "none" | "pulse" | "wiggle" | "float" | "spin" | "spin-cw" | "spin-ccw" | "blink" | "slide-in-left" | "slide-in-right" | "slide-in-bottom" | "slide-in-top" | "zoom-in" | "zoom-out" | "shake" | "ken-burns" | "heartbeat" | "pop-in" | "3d-flip-h" | "3d-flip-v" | "3d-wobble" | "pass-through-lr" | "pass-through-rl" | "pass-through-tb" | "pass-through-bt" | "pro-whip-pan" | "pro-elastic" | "pro-push" | "pro-slider-left" | "pro-slider-right" | "pro-glitch" | "pro-pan-up" | "pro-pan-down" | string;
+  speed: number;
+  intensity: number;
+}
+
 // --- VideoClip type ---
 type VideoClip = {
   id: string;
@@ -131,9 +138,16 @@ type VideoClip = {
   animationType?: "none" | "pulse" | "wiggle" | "float" | "spin" | "spin-cw" | "spin-ccw" | "blink" | "slide-in-left" | "slide-in-right" | "slide-in-bottom" | "slide-in-top" | "zoom-in" | "zoom-out" | "shake" | "ken-burns" | "heartbeat" | "pop-in" | "3d-flip-h" | "3d-flip-v" | "3d-wobble" | "pass-through-lr" | "pass-through-rl" | "pass-through-tb" | "pass-through-bt" | "pro-whip-pan" | "pro-elastic" | "pro-push" | "pro-slider-left" | "pro-slider-right" | "pro-glitch" | "pro-pan-up" | "pro-pan-down";
   animationSpeed?: number; // 0.1 to 5.0 (multiplier)
   animationIntensity?: number; // 0.1 to 5.0 (multiplier)
+  animations?: AnimationDef[];
   // Transitions
   transitionType?: "none" | "fade" | "wipeleft" | "wiperight" | "slideleft" | "slideright" | "circlecrop" | "pixelize" | "dissolve" | "flash-white" | "zoom-in";
   transitionDuration?: number;
+};
+
+export type AnimationDef = {
+  type: string;
+  speed: number;
+  intensity: number;
 };
 
 type VideoTrack = {
@@ -141,6 +155,277 @@ type VideoTrack = {
   name: string;
   isHidden?: boolean;
   isMuted?: boolean;
+};
+
+// --- Animation UI Component ---
+const ANIMATION_OPTIONS = [
+  { label: "None", value: "none" },
+  { group: "Continuous", options: [
+    { label: "Pulse (Scale)", value: "pulse" },
+    { label: "Wiggle (Rotate)", value: "wiggle" },
+    { label: "Float (Up/Down)", value: "float" },
+    { label: "Spin Clockwise", value: "spin-cw" },
+    { label: "Spin Anti-Clockwise", value: "spin-ccw" },
+    { label: "Blink (Flash)", value: "blink" }
+  ]},
+  { group: "In / Out (Broadcast)", options: [
+    { label: "Slide In (Left)", value: "slide-in-left" },
+    { label: "Slide In (Right)", value: "slide-in-right" },
+    { label: "Slide In (Bottom)", value: "slide-in-bottom" },
+    { label: "Slide In (Top)", value: "slide-in-top" }
+  ]},
+  { group: "Zoom", options: [
+    { label: "Zoom In", value: "zoom-in" },
+    { label: "Zoom Out", value: "zoom-out" }
+  ]},
+  { group: "Cinematic & Advanced", options: [
+    { label: "Camera Shake", value: "shake" },
+    { label: "Ken Burns (Pan & Zoom)", value: "ken-burns" },
+    { label: "Heartbeat", value: "heartbeat" },
+    { label: "Pop In (Bounce)", value: "pop-in" }
+  ]},
+  { group: "3D & Perspective", options: [
+    { label: "3D Coin Flip (Horizontal)", value: "3d-flip-h" },
+    { label: "3D Coin Flip (Vertical)", value: "3d-flip-v" },
+    { label: "3D Jello Wobble", value: "3d-wobble" }
+  ]},
+  { group: "Pass Through", options: [
+    { label: "Pass Through (Left to Right)", value: "pass-through-lr" },
+    { label: "Pass Through (Right to Left)", value: "pass-through-rl" },
+    { label: "Pass Through (Top to Bottom)", value: "pass-through-tb" },
+    { label: "Pass Through (Bottom to Top)", value: "pass-through-bt" }
+  ]},
+  { group: "Pro Essentials", options: [
+    { label: "Whip Pan (Fast Snap)", value: "pro-whip-pan" },
+    { label: "Elastic Pop (Overshoot)", value: "pro-elastic" },
+    { label: "Cinematic Push (Slow Dolly)", value: "pro-push" },
+    { label: "Cinematic Slider (Left)", value: "pro-slider-left" },
+    { label: "Cinematic Slider (Right)", value: "pro-slider-right" },
+    { label: "Digital Glitch", value: "pro-glitch" },
+    { label: "Pedestal Up", value: "pro-pan-up" },
+    { label: "Pedestal Down", value: "pro-pan-down" }
+  ]}
+];
+
+const AnimationListUI = ({ animations, onChange }: { animations: AnimationDef[], onChange: (a: AnimationDef[]) => void }) => {
+  const anims = animations?.length ? animations : [];
+  
+  const addAnimation = () => {
+    onChange([...anims, { type: "pulse", speed: 1.0, intensity: 1.0 }]);
+  };
+  
+  const updateAnimation = (idx: number, patch: Partial<AnimationDef>) => {
+    const next = [...anims];
+    next[idx] = { ...next[idx], ...patch };
+    onChange(next);
+  };
+  
+  const removeAnimation = (idx: number) => {
+    const next = [...anims];
+    next.splice(idx, 1);
+    onChange(next);
+  };
+
+  return (
+    <div className="pt-4 border-t border-zinc-800 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5"><Sparkles className="w-3 h-3" /> Animations</p>
+        <button onClick={addAnimation} className="text-[10px] bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 px-2 py-1 rounded transition-colors flex items-center gap-1">
+          <Plus className="w-3 h-3" /> Add Layer
+        </button>
+      </div>
+
+      {anims.length === 0 && (
+        <div className="text-center py-4 text-zinc-600 text-xs border border-dashed border-zinc-800 rounded-md bg-zinc-900/50">
+          No animations applied.<br/>Click &quot;Add Layer&quot; to animate this object.
+        </div>
+      )}
+
+      <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+        {anims.map((anim, idx) => (
+          <div key={idx} className="bg-zinc-800/50 rounded-md border border-zinc-700/50 p-2 space-y-2 relative group">
+            <div className="flex items-center gap-2">
+              <select 
+                value={anim.type}
+                onChange={e => updateAnimation(idx, { type: e.target.value })}
+                className="flex-1 bg-zinc-900 text-zinc-200 text-xs rounded border border-zinc-700 px-2 py-1 focus:outline-none focus:border-indigo-500"
+              >
+                {ANIMATION_OPTIONS.map((opt, i) => opt.group ? (
+                  <optgroup key={i} label={opt.group}>
+                    {opt.options.map(sub => <option key={sub.value} value={sub.value}>{sub.label}</option>)}
+                  </optgroup>
+                ) : (
+                  <option key={i} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <button onClick={() => removeAnimation(idx)} className="text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1" title="Remove Layer">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+            
+            {anim.type !== 'none' && (
+              <div className="grid grid-cols-2 gap-3 bg-indigo-500/5 p-2 rounded border border-indigo-500/10 mt-1">
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[9px]">
+                    <label className="font-medium text-zinc-400">Speed</label>
+                    <span className="text-zinc-500 tabular-nums">{anim.speed.toFixed(1)}x</span>
+                  </div>
+                  <input type="range" min={0.1} max={5.0} step={0.1} value={anim.speed} onChange={e => updateAnimation(idx, { speed: +e.target.value })} className="w-full h-1 accent-indigo-500" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[9px]">
+                    <label className="font-medium text-zinc-400">Intensity</label>
+                    <span className="text-zinc-500 tabular-nums">{anim.intensity.toFixed(1)}x</span>
+                  </div>
+                  <input type="range" min={0.1} max={5.0} step={0.1} value={anim.intensity} onChange={e => updateAnimation(idx, { intensity: +e.target.value })} className="w-full h-1 accent-indigo-500" />
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export const computeAnimationOffsets = (animations: AnimationDef[], localTime: number, duration: number) => {
+  let scaleX = 1;
+  let scaleY = 1;
+  let rotate = 0;
+  let x = 0;
+  let y = 0;
+  let opacityMultiplier = 1;
+
+  if (!animations || animations.length === 0) {
+    return { scaleX, scaleY, rotate, x, y, opacityMultiplier };
+  }
+
+  animations.forEach(anim => {
+    const speed = anim.speed || 1.0;
+    const intensity = anim.intensity || 1.0;
+    
+    switch(anim.type) {
+      case "pulse":
+        scaleX *= 1 + Math.sin(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
+        scaleY *= 1 + Math.sin(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
+        break;
+      case "wiggle":
+        rotate += Math.sin(localTime * Math.PI * 2 * speed) * 15 * intensity;
+        break;
+      case "float":
+        y += Math.sin(localTime * Math.PI * 2 * speed) * 10 * intensity;
+        break;
+      case "spin":
+      case "spin-cw":
+        rotate += localTime * 360 * speed;
+        break;
+      case "spin-ccw":
+        rotate -= localTime * 360 * speed;
+        break;
+      case "blink":
+        opacityMultiplier *= (Math.floor(localTime * 4 * speed) % 2 === 0) ? Math.max(0, 1 - 0.5 * intensity) : 1;
+        break;
+      case "slide-in-left":
+        if (localTime < 1 / speed) x += -100 + (localTime * speed * 100);
+        break;
+      case "slide-in-right":
+        if (localTime < 1 / speed) x += 100 - (localTime * speed * 100);
+        break;
+      case "slide-in-bottom":
+        if (localTime < 1 / speed) y += 100 - (localTime * speed * 100);
+        break;
+      case "slide-in-top":
+        if (localTime < 1 / speed) y += -100 + (localTime * speed * 100);
+        break;
+      case "zoom-in":
+        scaleX *= 1 + (localTime * speed * 0.1 * intensity);
+        scaleY *= 1 + (localTime * speed * 0.1 * intensity);
+        break;
+      case "zoom-out":
+        const zOut = Math.max(0, 1.2 - (localTime * speed * 0.1 * intensity));
+        scaleX *= zOut;
+        scaleY *= zOut;
+        break;
+      case "shake":
+        x += (Math.sin(localTime * 20 * speed) + Math.sin(localTime * 35 * speed)) * 5 * intensity;
+        y += (Math.cos(localTime * 25 * speed) + Math.sin(localTime * 40 * speed)) * 5 * intensity;
+        break;
+      case "ken-burns":
+        scaleX *= 1 + (localTime * speed * 0.05 * intensity);
+        scaleY *= 1 + (localTime * speed * 0.05 * intensity);
+        x += (localTime * speed * 5 * intensity);
+        y += (localTime * speed * 2 * intensity);
+        break;
+      case "heartbeat":
+        const beat = (localTime * speed) % 1;
+        const hb = 1 + (beat < 0.2 ? Math.sin(beat * 5 * Math.PI) * 0.2 * intensity : (beat > 0.3 && beat < 0.5 ? Math.sin((beat - 0.3) * 5 * Math.PI) * 0.2 * intensity : 0));
+        scaleX *= hb;
+        scaleY *= hb;
+        break;
+      case "pop-in":
+        if (localTime < 1/speed) {
+           const t = localTime * speed;
+           const pi = 1 + Math.sin(t * Math.PI * 3) * Math.exp(-t * 5) * intensity;
+           scaleX *= pi;
+           scaleY *= pi;
+        }
+        break;
+      case '3d-flip-h': scaleX *= Math.cos(localTime * Math.PI * 2 * speed); break;
+      case '3d-flip-v': scaleY *= Math.cos(localTime * Math.PI * 2 * speed); break;
+      case '3d-wobble': 
+        scaleX *= 1 + Math.sin(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
+        scaleY *= 1 + Math.cos(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
+        break;
+      case 'pass-through-lr':
+        if (localTime < 1/speed) x += -100 + (localTime * speed * 100);
+        else if (localTime > duration - 1/speed) x += (localTime - (duration - 1/speed)) * speed * 100;
+        break;
+      case 'pass-through-rl':
+        if (localTime < 1/speed) x += 100 - (localTime * speed * 100);
+        else if (localTime > duration - 1/speed) x += -(localTime - (duration - 1/speed)) * speed * 100;
+        break;
+      case 'pass-through-tb':
+        if (localTime < 1/speed) y += -100 + (localTime * speed * 100);
+        else if (localTime > duration - 1/speed) y += (localTime - (duration - 1/speed)) * speed * 100;
+        break;
+      case 'pass-through-bt':
+        if (localTime < 1/speed) y += 100 - (localTime * speed * 100);
+        else if (localTime > duration - 1/speed) y += -(localTime - (duration - 1/speed)) * speed * 100;
+        break;
+      case 'pro-whip-pan':
+        x += -100 * Math.exp(-localTime * speed * 12) * intensity;
+        break;
+      case 'pro-elastic':
+        const tEP = localTime * speed;
+        const eVal = 1 - Math.exp(-tEP * 6) * Math.cos(tEP * 15) * intensity;
+        scaleX *= eVal;
+        scaleY *= eVal;
+        break;
+      case 'pro-push':
+        scaleX *= 1 + (localTime * speed * 0.02 * intensity);
+        scaleY *= 1 + (localTime * speed * 0.02 * intensity);
+        break;
+      case 'pro-slider-left':
+        x += -(localTime * speed * 2 * intensity);
+        break;
+      case 'pro-slider-right':
+        x += (localTime * speed * 2 * intensity);
+        break;
+      case 'pro-glitch':
+        x += (Math.random() - 0.5) * 10 * intensity;
+        y += (Math.random() - 0.5) * 3 * intensity;
+        if (Math.random() > 0.8) scaleX *= 1 + (Math.random() - 0.5) * 0.1 * intensity;
+        break;
+      case 'pro-pan-up':
+        y += -(localTime * speed * 1.5 * intensity);
+        break;
+      case 'pro-pan-down':
+        y += (localTime * speed * 1.5 * intensity);
+        break;
+    }
+  });
+
+  return { scaleX, scaleY, rotate, x, y, opacityMultiplier };
 };
 
 // --- Aspect Ratio Presets ---
@@ -418,6 +703,41 @@ async function getCroppedImg(
 
   return canvas.toDataURL("image/png");
 }
+
+const AudioDurationBadge = ({ url }: { url: string }) => {
+  const [duration, setDuration] = useState<number | null>(null);
+
+  if (!duration) {
+    return (
+      <>
+        <span className="ml-1 text-[8px] font-mono text-zinc-500 bg-zinc-800/80 px-1 rounded animate-pulse">[--:--]</span>
+        <audio 
+          src={url} 
+          className="hidden" 
+          preload="metadata"
+          onLoadedMetadata={(e) => {
+            const dur = e.currentTarget.duration;
+            if (dur && !isNaN(dur) && dur > 0) setDuration(dur);
+          }}
+          onDurationChange={(e) => {
+            const dur = e.currentTarget.duration;
+            if (dur && !isNaN(dur) && dur > 0) setDuration(dur);
+          }}
+          onError={() => setDuration(0.1)} // fallback to prevent infinite pulse on error
+        />
+      </>
+    );
+  }
+  
+  if (duration === 0.1) {
+    return <span className="ml-1 text-[8px] font-mono text-red-500 bg-red-500/10 px-1 rounded" title="Failed to load">[err]</span>;
+  }
+
+  const mins = Math.floor(duration / 60);
+  const secs = Math.floor(duration % 60).toString().padStart(2, '0');
+  return <span className="ml-1 text-[8px] font-mono text-zinc-400 bg-zinc-800/80 px-1 rounded">[{mins}:{secs}]</span>;
+};
+
 
 export default function VideoEditorPage() {
   const params = useParams();
@@ -873,7 +1193,7 @@ export default function VideoEditorPage() {
     initialTotalDuration: number;
   } | null>(null);
   // Canvas assets list (for Assets panel)
-  const [canvasAssets, setCanvasAssets] = useState<{ id: string; label: string; obj: fabric.Object; startTime: number; endTime: number; animationType?: string; animationSpeed?: number; animationIntensity?: number }[]>([]);
+  const [canvasAssets, setCanvasAssets] = useState<{ id: string; label: string; obj: fabric.Object; startTime: number; endTime: number; animationType?: string; animationSpeed?: number; animationIntensity?: number; animations?: AnimationDef[] }[]>([]);
   const refreshAssets = useCallback(() => {
     if (!fabricCanvasRef.current) return;
     const objects = fabricCanvasRef.current.getObjects();
@@ -911,10 +1231,12 @@ export default function VideoEditorPage() {
         animationType: (o as any).animationType || "none",
         animationSpeed: (o as any).animationSpeed || 1.0,
         animationIntensity: (o as any).animationIntensity || 1.0,
+        animations: (o as any).animations || [],
       };
     }));
   }, []);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [assetDragState, setAssetDragState] = useState<{
     assetId: string;
     type: 'move' | 'trimStart' | 'trimEnd';
@@ -1294,7 +1616,6 @@ export default function VideoEditorPage() {
             
             const startTime = o.startTime || 0;
             const endTime = o.endTime || 9999;
-            const animType = o.animationType || 'none';
             const isActive = activeObj === o;
             
             if (gTime >= startTime && gTime <= endTime) {
@@ -1310,116 +1631,21 @@ export default function VideoEditorPage() {
                 if (o._baseOpacity === undefined || isNaN(o._baseOpacity)) o._baseOpacity = isNaN(o.opacity) ? 1 : o.opacity;
 
                 const isDragging = (fabricCanvasRef.current as any)?.__isDragging;
+                const activeAnims = o.animations || (o.animationType && o.animationType !== 'none' ? [{ type: o.animationType, speed: o.animationSpeed || 1, intensity: o.animationIntensity || 1 }] : []);
 
-                if (animType !== 'none' && (!isActive || !isDragging)) {
-                    const speed = o.animationSpeed || 1.0;
-                    const intensity = o.animationIntensity || 1.0;
+                if (activeAnims.length > 0 && (!isActive || !isDragging)) {
                     const localTime = gTime - startTime;
-                    
-                    let scaleXAnim = 1;
-                    let scaleYAnim = 1;
-                    let rotate = 0;
-                    let xOffset = 0;
-                    let yOffset = 0;
-                    let alpha = 1;
-                    
-                    // Selected object uses real-time for instant preview, else follows timeline
                     const animTime = isActive ? nowSec : localTime;
-
-                    switch(animType) {
-                       case 'pulse': scaleXAnim = scaleYAnim = 1 + Math.sin(animTime * Math.PI * 2 * speed) * 0.1 * intensity; break;
-                       case 'wiggle': rotate = Math.sin(animTime * Math.PI * 2 * speed) * 15 * intensity; break;
-                       case 'float': yOffset = Math.sin(animTime * Math.PI * 2 * speed) * 10 * intensity; break;
-                       case 'spin':
-                       case 'spin-cw': rotate = animTime * 360 * speed; break;
-                       case 'spin-ccw': rotate = -animTime * 360 * speed; break;
-                       case 'blink': alpha = (Math.floor(animTime * 4 * speed) % 2 === 0) ? Math.max(0, 1 - 0.5 * intensity) : 1; break;
-                       case 'slide-in-left': if (localTime < 1/speed) xOffset = -200 + (localTime * speed * 200); break;
-                       case 'slide-in-right': if (localTime < 1/speed) xOffset = 200 - (localTime * speed * 200); break;
-                       case 'slide-in-bottom': if (localTime < 1/speed) yOffset = 200 - (localTime * speed * 200); break;
-                       case 'slide-in-top': if (localTime < 1/speed) yOffset = -200 + (localTime * speed * 200); break;
-                       case 'zoom-in': scaleXAnim = scaleYAnim = 1 + (localTime * speed * 0.1 * intensity); break;
-                       case 'zoom-out': scaleXAnim = scaleYAnim = Math.max(0, 1.2 - (localTime * speed * 0.1 * intensity)); break;
-                       case 'shake': 
-                          xOffset = (Math.sin(animTime * 20 * speed) + Math.sin(animTime * 35 * speed)) * 5 * intensity;
-                          yOffset = (Math.cos(animTime * 25 * speed) + Math.sin(animTime * 40 * speed)) * 5 * intensity;
-                          break;
-                       case 'ken-burns':
-                          scaleXAnim = scaleYAnim = 1 + (localTime * speed * 0.05 * intensity);
-                          xOffset = (localTime * speed * 5 * intensity);
-                          yOffset = (localTime * speed * 2 * intensity);
-                          break;
-                       case 'heartbeat':
-                          const beat = (animTime * speed) % 1;
-                          scaleXAnim = scaleYAnim = 1 + (beat < 0.2 ? Math.sin(beat * 5 * Math.PI) * 0.2 * intensity : (beat > 0.3 && beat < 0.5 ? Math.sin((beat - 0.3) * 5 * Math.PI) * 0.2 * intensity : 0));
-                          break;
-                       case 'pop-in':
-                          if (localTime < 1/speed) {
-                             const t = localTime * speed;
-                             scaleXAnim = scaleYAnim = 1 + Math.sin(t * Math.PI * 3) * Math.exp(-t * 5) * intensity;
-                          }
-                          break;
-                       case '3d-flip-h': scaleXAnim = Math.cos(animTime * Math.PI * 2 * speed); break;
-                       case '3d-flip-v': scaleYAnim = Math.cos(animTime * Math.PI * 2 * speed); break;
-                       case '3d-wobble': 
-                          scaleXAnim = 1 + Math.sin(animTime * Math.PI * 2 * speed) * 0.1 * intensity;
-                          scaleYAnim = 1 + Math.cos(animTime * Math.PI * 2 * speed) * 0.1 * intensity;
-                          break;
-                       case 'pass-through-lr':
-                          const durLR = endTime - startTime;
-                          if (localTime < 1/speed) xOffset = -200 + (localTime * speed * 200);
-                          else if (localTime > durLR - 1/speed) xOffset = (localTime - (durLR - 1/speed)) * speed * 200;
-                          break;
-                       case 'pass-through-rl':
-                          const durRL = endTime - startTime;
-                          if (localTime < 1/speed) xOffset = 200 - (localTime * speed * 200);
-                          else if (localTime > durRL - 1/speed) xOffset = -(localTime - (durRL - 1/speed)) * speed * 200;
-                          break;
-                       case 'pass-through-tb':
-                          const durTB = endTime - startTime;
-                          if (localTime < 1/speed) yOffset = -200 + (localTime * speed * 200);
-                          else if (localTime > durTB - 1/speed) yOffset = (localTime - (durTB - 1/speed)) * speed * 200;
-                          break;
-                       case 'pass-through-bt':
-                          const durBT = endTime - startTime;
-                          if (localTime < 1/speed) yOffset = 200 - (localTime * speed * 200);
-                          else if (localTime > durBT - 1/speed) yOffset = -(localTime - (durBT - 1/speed)) * speed * 200;
-                          break;
-                       case 'pro-whip-pan':
-                          xOffset = -500 * Math.exp(-localTime * speed * 12) * intensity;
-                          break;
-                       case 'pro-elastic':
-                          const tE = localTime * speed;
-                          scaleXAnim = scaleYAnim = 1 - Math.exp(-tE * 6) * Math.cos(tE * 15) * intensity;
-                          break;
-                       case 'pro-push':
-                          scaleXAnim = scaleYAnim = 1 + (localTime * speed * 0.02 * intensity);
-                          break;
-                       case 'pro-slider-left':
-                          xOffset = -(localTime * speed * 10 * intensity);
-                          break;
-                       case 'pro-slider-right':
-                          xOffset = (localTime * speed * 10 * intensity);
-                          break;
-                       case 'pro-glitch':
-                          xOffset = (Math.random() - 0.5) * 20 * intensity;
-                          yOffset = (Math.random() - 0.5) * 5 * intensity;
-                          break;
-                       case 'pro-pan-up':
-                          yOffset = -(localTime * speed * 8 * intensity);
-                          break;
-                       case 'pro-pan-down':
-                          yOffset = (localTime * speed * 8 * intensity);
-                          break;
-                    }
+                    
+                    const animProps = computeAnimationOffsets(activeAnims, animTime, endTime - startTime);
                     
                     o.set({
-                        scaleX: (o._baseScaleX || 1) * scaleXAnim,
-                        scaleY: (o._baseScaleY || 1) * scaleYAnim,
-                        angle: (o._baseAngle || 0) + rotate,
-                        left: (o._baseLeft || 0) + xOffset,
-                        top: (o._baseTop || 0) + yOffset,
-                        opacity: (o._baseOpacity ?? 1) * alpha,
+                        scaleX: (o._baseScaleX || 1) * animProps.scaleX,
+                        scaleY: (o._baseScaleY || 1) * animProps.scaleY,
+                        angle: (o._baseAngle || 0) + animProps.rotate,
+                        left: (o._baseLeft || 0) + animProps.x,
+                        top: (o._baseTop || 0) + animProps.y,
+                        opacity: (o._baseOpacity ?? 1) * animProps.alpha,
                         visible: true
                     });
                     needsRender = true;
@@ -1508,6 +1734,24 @@ export default function VideoEditorPage() {
       }
     });
   }, [globalTime, isPlaying, activeClips, playbackSpeed, videoTracks, masterVolume, audioClips]);
+
+  // Fallback to catch audio duration if React misses the onLoadedMetadata event
+  useEffect(() => {
+    let changed = false;
+    const newClips = audioClips.map(audio => {
+      if (audio.fileDuration === 0) {
+        const el = audioRefs.current[audio.id];
+        if (el && el.readyState >= 1 && !isNaN(el.duration) && el.duration > 0) {
+          changed = true;
+          return { ...audio, fileDuration: el.duration, trimEnd: el.duration, duration: el.duration };
+        }
+      }
+      return audio;
+    });
+    if (changed) {
+      setAudioClips(newClips);
+    }
+  }, [audioClips, setAudioClips]);
 
   // Auto-scroll timeline during playback
   useEffect(() => {
@@ -1635,7 +1879,10 @@ export default function VideoEditorPage() {
       const rect = tracksAreaRef.current.getBoundingClientRect();
       const trackWidth = rect.width - 80; 
       const deltaPx = e.clientX - clipDragState.startX;
-      const deltaTime = (deltaPx / trackWidth) * (totalDuration || 1);
+      
+      const initialLeftPct = clipDragState.initialStart / (clipDragState.initialTotalDuration || 1);
+      const currentLeftPct = initialLeftPct + (deltaPx / trackWidth);
+      let deltaTime = (currentLeftPct * (totalDuration || 1)) - clipDragState.initialStart;
 
       let hoverTrackId: string | undefined;
       if (clipDragState.type === 'move') {
@@ -1754,9 +2001,13 @@ export default function VideoEditorPage() {
       const container = tracksAreaRef.current;
       if (!container) return;
       
-      const trackWidth = container.scrollWidth - 80;
+      const rect = container.getBoundingClientRect();
+      const trackWidth = rect.width - 80;
       const deltaPx = e.clientX - audioDragState.startX;
-      let deltaTime = (deltaPx / trackWidth) * (audioDragState.initialTotalDuration || 1);
+      
+      const initialLeftPct = audioDragState.initialStart / (audioDragState.initialTotalDuration || 1);
+      const currentLeftPct = initialLeftPct + (deltaPx / trackWidth);
+      let deltaTime = (currentLeftPct * (totalDuration || 1)) - audioDragState.initialStart;
       
       setAudioClips(prev => prev.map(c => {
         if (c.id !== audioDragState.clipId) return c;
@@ -1828,7 +2079,10 @@ export default function VideoEditorPage() {
       const rect = tracksAreaRef.current.getBoundingClientRect();
       const trackWidth = rect.width - 80; 
       const deltaPx = e.clientX - fadeDragState.startX;
-      const deltaTime = (deltaPx / trackWidth) * fadeDragState.initialTotalDuration;
+      
+      const initialFadePct = fadeDragState.initialFade / (fadeDragState.initialTotalDuration || 1);
+      const currentFadePct = initialFadePct + ((fadeDragState.type === 'fadeIn' ? deltaPx : -deltaPx) / trackWidth);
+      const deltaTime = (currentFadePct * (totalDuration || 1)) - fadeDragState.initialFade;
 
       setClips(prev => prev.map(c => {
         if (c.id !== fadeDragState.clipId) return c;
@@ -2151,7 +2405,12 @@ export default function VideoEditorPage() {
         } else {
            img.scale(0.5);
         }
-        img.set({ left: 40, top: 40 });
+        img.set({ 
+          left: fabricCanvasRef.current!.width! / 2, 
+          top: fabricCanvasRef.current!.height! / 2,
+          originX: 'center',
+          originY: 'center'
+        });
         (img as any).id = `img-${Date.now()}`;
         (img as any).startTime = globalTime;
         (img as any).endTime = Math.min(globalTime + 5, totalDuration);
@@ -2192,7 +2451,12 @@ export default function VideoEditorPage() {
     if (!fabricCanvasRef.current) return;
     fabric.Image.fromURL(url, (img) => {
       img.scale(0.2);
-      img.set({ left: 40, top: 40 });
+      img.set({ 
+        left: fabricCanvasRef.current!.width! / 2, 
+        top: fabricCanvasRef.current!.height! / 2,
+        originX: 'center',
+        originY: 'center'
+      });
       (img as any).id = `img-${Date.now()}`;
       (img as any).startTime = globalTime;
       (img as any).endTime = Math.min(globalTime + 5, totalDuration);
@@ -2200,6 +2464,68 @@ export default function VideoEditorPage() {
       fabricCanvasRef.current?.setActiveObject(img);
       fabricCanvasRef.current?.renderAll();
     }, { crossOrigin: 'anonymous' });
+  };
+  const handleReplaceImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !fabricCanvasRef.current || !selectedObj || selectedObj.type !== 'image') return;
+    
+    try {
+      showToast("Replacing image...", "success");
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      
+      if (!data.success) {
+        showToast("Failed to upload replacement image", "error");
+        return;
+      }
+      
+      const fileUrl = data.url;
+      const targetImg = selectedObj as fabric.Image;
+      
+      // Calculate old visual dimensions to maintain them
+      const oldWidth = targetImg.width! * targetImg.scaleX!;
+      const oldHeight = targetImg.height! * targetImg.scaleY!;
+      const hadCircleClip = targetImg.clipPath && targetImg.clipPath.type === 'circle';
+      
+      targetImg.setSrc(fileUrl, () => {
+        let newScaleX: number, newScaleY: number;
+        if (hadCircleClip) {
+          const minDim = Math.min(targetImg.width!, targetImg.height!);
+          newScaleX = oldWidth / minDim;
+          newScaleY = newScaleX;
+          targetImg.set({
+            scaleX: newScaleX,
+            scaleY: newScaleY,
+            clipPath: new fabric.Circle({
+              radius: minDim / 2,
+              originX: 'center',
+              originY: 'center'
+            })
+          });
+        } else {
+          // Apply new scale so the new image matches the old bounding box perfectly
+          newScaleX = oldWidth / targetImg.width!;
+          newScaleY = oldHeight / targetImg.height!;
+          targetImg.set({
+            scaleX: newScaleX,
+            scaleY: newScaleY
+          });
+        }
+        
+        // Update base properties so export doesn't revert to old scale
+        if ((targetImg as any)._baseScaleX !== undefined) {
+          (targetImg as any)._baseScaleX = newScaleX;
+          (targetImg as any)._baseScaleY = newScaleY;
+        }
+        fabricCanvasRef.current?.renderAll();
+      }, { crossOrigin: 'anonymous' });
+      
+    } catch(err) {
+      showToast("Failed to replace image", "error");
+    }
   };
 
   const handleApplyCrop = async () => {
@@ -2941,128 +3267,16 @@ export default function VideoEditorPage() {
          previewOpacity = baseOpacity * ((clip.duration - localTime) / clip.fadeOutDuration);
       }
 
-      let animScaleX = 1;
-      let animScaleY = 1;
-      let animRotate = 0;
-      let animX = 0;
-      let animY = 0;
-
-      if (clip.animationType && clip.animationType !== "none") {
-        const speed = clip.animationSpeed || 1.0;
-        const intensity = clip.animationIntensity || 1.0;
+      const activeAnims = clip.animations?.length ? clip.animations : 
+        (clip.animationType && clip.animationType !== "none" ? [{ type: clip.animationType, speed: clip.animationSpeed, intensity: clip.animationIntensity } as AnimationDef] : []);
         
-        switch(clip.animationType) {
-          case "pulse":
-            animScaleX = animScaleY = 1 + Math.sin(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
-            break;
-          case "wiggle":
-            animRotate = Math.sin(localTime * Math.PI * 2 * speed) * 15 * intensity;
-            break;
-          case "float":
-            animY = Math.sin(localTime * Math.PI * 2 * speed) * 10 * intensity;
-            break;
-          case "spin":
-          case "spin-cw":
-            animRotate = localTime * 360 * speed;
-            break;
-          case "spin-ccw":
-            animRotate = -localTime * 360 * speed;
-            break;
-          case "blink":
-            previewOpacity *= (Math.floor(localTime * 4 * speed) % 2 === 0) ? Math.max(0, 1 - 0.5 * intensity) : 1;
-            break;
-          case "slide-in-left":
-            if (localTime < 1 / speed) animX = -100 + (localTime * speed * 100);
-            break;
-          case "slide-in-right":
-            if (localTime < 1 / speed) animX = 100 - (localTime * speed * 100);
-            break;
-          case "slide-in-bottom":
-            if (localTime < 1 / speed) animY = 100 - (localTime * speed * 100);
-            break;
-          case "slide-in-top":
-            if (localTime < 1 / speed) animY = -100 + (localTime * speed * 100);
-            break;
-          case "zoom-in":
-            animScaleX = animScaleY = 1 + (localTime * speed * 0.1 * intensity);
-            break;
-          case "zoom-out":
-            animScaleX = animScaleY = Math.max(0, 1.2 - (localTime * speed * 0.1 * intensity));
-            break;
-          case "shake":
-            animX = (Math.sin(localTime * 20 * speed) + Math.sin(localTime * 35 * speed)) * 5 * intensity;
-            animY = (Math.cos(localTime * 25 * speed) + Math.sin(localTime * 40 * speed)) * 5 * intensity;
-            break;
-          case "ken-burns":
-            animScaleX = animScaleY = 1 + (localTime * speed * 0.05 * intensity);
-            animX = (localTime * speed * 5 * intensity);
-            animY = (localTime * speed * 2 * intensity);
-            break;
-          case "heartbeat":
-            const beat = (localTime * speed) % 1;
-            animScaleX = animScaleY = 1 + (beat < 0.2 ? Math.sin(beat * 5 * Math.PI) * 0.2 * intensity : (beat > 0.3 && beat < 0.5 ? Math.sin((beat - 0.3) * 5 * Math.PI) * 0.2 * intensity : 0));
-            break;
-          case "pop-in":
-            if (localTime < 1/speed) {
-               const t = localTime * speed;
-               animScaleX = animScaleY = 1 + Math.sin(t * Math.PI * 3) * Math.exp(-t * 5) * intensity;
-            }
-            break;
-          case '3d-flip-h': animScaleX = Math.cos(localTime * Math.PI * 2 * speed); break;
-          case '3d-flip-v': animScaleY = Math.cos(localTime * Math.PI * 2 * speed); break;
-          case '3d-wobble': 
-            animScaleX = 1 + Math.sin(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
-            animScaleY = 1 + Math.cos(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
-            break;
-          case 'pass-through-lr':
-            const ptDurLR = clip.duration || (clip.endTime - clip.startTime);
-            if (localTime < 1/speed) animX = -100 + (localTime * speed * 100);
-            else if (localTime > ptDurLR - 1/speed) animX = (localTime - (ptDurLR - 1/speed)) * speed * 100;
-            break;
-          case 'pass-through-rl':
-            const ptDurRL = clip.duration || (clip.endTime - clip.startTime);
-            if (localTime < 1/speed) animX = 100 - (localTime * speed * 100);
-            else if (localTime > ptDurRL - 1/speed) animX = -(localTime - (ptDurRL - 1/speed)) * speed * 100;
-            break;
-          case 'pass-through-tb':
-            const ptDurTB = clip.duration || (clip.endTime - clip.startTime);
-            if (localTime < 1/speed) animY = -100 + (localTime * speed * 100);
-            else if (localTime > ptDurTB - 1/speed) animY = (localTime - (ptDurTB - 1/speed)) * speed * 100;
-            break;
-          case 'pass-through-bt':
-            const ptDurBT = clip.duration || (clip.endTime - clip.startTime);
-            if (localTime < 1/speed) animY = 100 - (localTime * speed * 100);
-            else if (localTime > ptDurBT - 1/speed) animY = -(localTime - (ptDurBT - 1/speed)) * speed * 100;
-            break;
-          case 'pro-whip-pan':
-            animX = -100 * Math.exp(-localTime * speed * 12) * intensity;
-            break;
-          case 'pro-elastic':
-            const tEP = localTime * speed;
-            animScaleX = animScaleY = 1 - Math.exp(-tEP * 6) * Math.cos(tEP * 15) * intensity;
-            break;
-          case 'pro-push':
-            animScaleX = animScaleY = 1 + (localTime * speed * 0.02 * intensity);
-            break;
-          case 'pro-slider-left':
-            animX = -(localTime * speed * 2 * intensity);
-            break;
-          case 'pro-slider-right':
-            animX = (localTime * speed * 2 * intensity);
-            break;
-          case 'pro-glitch':
-            animX = (Math.random() - 0.5) * 10 * intensity;
-            animY = (Math.random() - 0.5) * 3 * intensity;
-            if (Math.random() > 0.8) animScaleX = 1 + (Math.random() - 0.5) * 0.1 * intensity;
-            break;
-          case 'pro-pan-up':
-            animY = -(localTime * speed * 1.5 * intensity);
-            break;
-          case 'pro-pan-down':
-            animY = (localTime * speed * 1.5 * intensity);
-            break;
-        }
-      }
+      const animProps = computeAnimationOffsets(activeAnims, localTime, clip.duration);
+      let animScaleX = animProps.scaleX;
+      let animScaleY = animProps.scaleY;
+      let animRotate = animProps.rotate;
+      let animX = animProps.x;
+      let animY = animProps.y;
+      previewOpacity *= animProps.opacityMultiplier;
 
       if (clip.type === "ticker") {
         ctx.save();
@@ -3284,7 +3498,10 @@ export default function VideoEditorPage() {
   };
 
   const renderVideo = async (exportType: "local" | "library" | "gcp") => {
-    if (clips.length === 0) return;
+    if (clips.length === 0 && canvasAssets.length === 0 && audioClips.length === 0) {
+      showToast("Timeline is empty. Add some content before exporting.", "error");
+      return;
+    }
     setIsRendering(true);
     setProgress(50); // Show intermediate progress since backend doesn't stream progress yet
     try {
@@ -3550,36 +3767,68 @@ export default function VideoEditorPage() {
           let oy = `${a.cy} - h/2`;
           const T = `(t-${a.start})`;
           
-          switch(a.animType) {
-            case "pulse":
-              assetFilter += `,scale=w='iw*(1+sin(${T}*PI*2*${a.animSpeed})*0.1*${a.animIntensity})':h='ih*(1+sin(${T}*PI*2*${a.animSpeed})*0.1*${a.animIntensity})':eval=frame`;
-              break;
-            case "wiggle":
-              assetFilter += `,rotate=a='sin(${T}*PI*2*${a.animSpeed})*PI/12*${a.animIntensity}':ow='hypot(iw,ih)':oh='hypot(iw,ih)':c=none`;
-              break;
-            case "spin-cw":
-            case "spin":
-              assetFilter += `,rotate=a='${T}*2*PI*${a.animSpeed}':ow='hypot(iw,ih)':oh='hypot(iw,ih)':c=none`;
-              break;
-            case "spin-ccw":
-              assetFilter += `,rotate=a='-${T}*2*PI*${a.animSpeed}':ow='hypot(iw,ih)':oh='hypot(iw,ih)':c=none`;
-              break;
-            case "blink":
-              assetFilter += `,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*if(eq(mod(floor((T-${a.start})*4*${a.animSpeed}),2),0),max(0,1-0.5*${a.animIntensity}),1)'`;
-              break;
-            case "slide-in-left":
-              ox = `${a.cx} - w/2 + w * min(0, -1 + ${T}*${a.animSpeed})`;
-              break;
-            case "slide-in-right":
-              ox = `${a.cx} - w/2 + w * max(0, 1 - ${T}*${a.animSpeed})`;
-              break;
-            case "slide-in-top":
-              oy = `${a.cy} - h/2 + h * min(0, -1 + ${T}*${a.animSpeed})`;
-              break;
-            case "slide-in-bottom":
-              oy = `${a.cy} - h/2 + h * max(0, 1 - ${T}*${a.animSpeed})`;
-              break;
-          }
+          const activeAnims = a.animations?.length ? a.animations : 
+             (a.animType && a.animType !== "none" ? [{ type: a.animType, speed: a.animSpeed, intensity: a.animIntensity } as AnimationDef] : []);
+             
+          activeAnims.forEach(anim => {
+             const speed = anim.speed || 1.0;
+             const intensity = anim.intensity || 1.0;
+             switch(anim.type) {
+                case "pulse":
+                   assetFilter += `,scale=w='iw*(1+sin(${T}*PI*2*${speed})*0.1*${intensity})':h='ih*(1+sin(${T}*PI*2*${speed})*0.1*${intensity})':eval=frame`;
+                   break;
+                case "wiggle":
+                   assetFilter += `,rotate=a='sin(${T}*PI*2*${speed})*PI/12*${intensity}':ow='hypot(iw,ih)':oh='hypot(iw,ih)':c=none`;
+                   break;
+                case "spin-cw":
+                case "spin":
+                   assetFilter += `,rotate=a='${T}*2*PI*${speed}':ow='hypot(iw,ih)':oh='hypot(iw,ih)':c=none`;
+                   break;
+                case "spin-ccw":
+                   assetFilter += `,rotate=a='-${T}*2*PI*${speed}':ow='hypot(iw,ih)':oh='hypot(iw,ih)':c=none`;
+                   break;
+                case "blink":
+                   assetFilter += `,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*if(eq(mod(floor((T-${a.start})*4*${speed}),2),0),max(0,1-0.5*${intensity}),1)'`;
+                   break;
+                case "slide-in-left":
+                   ox += ` + w * min(0, -1 + ${T}*${speed})`;
+                   break;
+                case "slide-in-right":
+                   ox += ` + w * max(0, 1 - ${T}*${speed})`;
+                   break;
+                case "slide-in-top":
+                   oy += ` + h * min(0, -1 + ${T}*${speed})`;
+                   break;
+                case "slide-in-bottom":
+                   oy += ` + h * max(0, 1 - ${T}*${speed})`;
+                   break;
+                case "zoom-in":
+                   assetFilter += `,scale=w='iw*(1+(${T}*${speed}*0.1*${intensity}))':h='ih*(1+(${T}*${speed}*0.1*${intensity}))':eval=frame`;
+                   break;
+                case "zoom-out":
+                   assetFilter += `,scale=w='iw*max(0,1.2-(${T}*${speed}*0.1*${intensity}))':h='ih*max(0,1.2-(${T}*${speed}*0.1*${intensity}))':eval=frame`;
+                   break;
+                case "shake":
+                   ox += ` + (sin(${T}*20*${speed}) + sin(${T}*35*${speed}))*5*${intensity}`;
+                   oy += ` + (cos(${T}*25*${speed}) + sin(${T}*40*${speed}))*5*${intensity}`;
+                   break;
+                case "pro-whip-pan":
+                   ox += ` - 100 * exp(-${T}*${speed}*12)*${intensity}`;
+                   break;
+                case "pro-slider-left":
+                   ox += ` - (${T}*${speed}*2*${intensity})`;
+                   break;
+                case "pro-slider-right":
+                   ox += ` + (${T}*${speed}*2*${intensity})`;
+                   break;
+                case "pro-pan-up":
+                   oy += ` - (${T}*${speed}*1.5*${intensity})`;
+                   break;
+                case "pro-pan-down":
+                   oy += ` + (${T}*${speed}*1.5*${intensity})`;
+                   break;
+             }
+          });
           
           const nextOut = `[vasset${i}]`;
           finalFilter += `;${assetFilter}[prep_asset${i}];${lastOut}[prep_asset${i}]overlay=x='${ox}':y='${oy}':enable='between(t,${a.start},${a.end})'${nextOut}`;
@@ -3714,13 +3963,13 @@ export default function VideoEditorPage() {
         const isImg = clip.type === "image";
         const ext = isImg ? "png" : "mp4";
         if (isImg) {
-          inputArgs.push("-loop", "1", "-framerate", exportFps.toString(), "-i", `clip${i}.${ext}`);
+          inputArgs.push("-loop", "1", "-framerate", exportFps.toString(), "-t", totalDuration.toString(), "-i", `clip${i}.${ext}`);
         } else {
           inputArgs.push("-i", `clip${i}.${ext}`);
         }
       });
-      assetOverlays.forEach((a) => inputArgs.push("-loop", "1", "-framerate", exportFps.toString(), "-i", a.name));
-      tickerAssets.forEach((a) => inputArgs.push("-loop", "1", "-framerate", exportFps.toString(), "-i", a.name));
+      assetOverlays.forEach((a) => inputArgs.push("-loop", "1", "-framerate", exportFps.toString(), "-t", totalDuration.toString(), "-i", a.name));
+      tickerAssets.forEach((a) => inputArgs.push("-loop", "1", "-framerate", exportFps.toString(), "-t", totalDuration.toString(), "-i", a.name));
       
       let hasCustomAudioMap = false;
       if (audioClips.length > 0) {
@@ -3749,9 +3998,8 @@ export default function VideoEditorPage() {
           if (aoutLabels.length > 1) {
               finalFilter += `;${aoutLabels.join('')}amix=inputs=${aoutLabels.length}:duration=first:dropout_transition=2[aout]`;
           } else {
-              finalFilter += `;${aoutLabels[0]}copy[aout]`; // Actually copy doesn't work for audio filters like this. Just rename the pad
-              // Or better, just don't use amix if length is 1
-              finalFilter = finalFilter.replace(aoutLabels[0], '[aout]');
+              // Pass a single audio stream through unmodified to map to [aout]
+              finalFilter += `;${aoutLabels[0]}anull[aout]`;
           }
           
           mapArgs.push("-map", "[aout]");
@@ -3780,8 +4028,13 @@ export default function VideoEditorPage() {
         const clip = validVideoClips[i];
         const isImg = clip.type === "image";
         const ext = isImg ? "png" : "mp4";
-        const fileBlob = await fetch(clip.url).then(r => r.blob());
-        formData.append("files", fileBlob, `clip${i}.${ext}`);
+        try {
+          const fileBlob = await fetch(clip.url).then(r => r.blob());
+          formData.append("files", fileBlob, `clip${i}.${ext}`);
+        } catch (err: any) {
+          console.error("Failed to fetch video clip:", clip.url, err);
+          throw new Error(`Failed to load a video clip/image from the timeline for rendering. If this is a local file you previously uploaded, please try re-uploading it to your project. Error: ${err.message}`);
+        }
       }
       
       // Append generated overlays
@@ -3796,16 +4049,27 @@ export default function VideoEditorPage() {
       
       // Append audio clips
       for (let i = 0; i < audioClips.length; i++) {
-        const audioBlob = await fetch(audioClips[i].url).then(r => r.blob());
-        formData.append("files", audioBlob, `audio${i}.mp3`);
+        try {
+          const audioBlob = await fetch(audioClips[i].url).then(r => r.blob());
+          formData.append("files", audioBlob, `audio${i}.mp3`);
+        } catch (err: any) {
+          console.error("Failed to fetch audio clip:", audioClips[i].url, err);
+          throw new Error(`Failed to load an audio clip from the timeline for rendering. If this is a local file you previously uploaded, please try re-uploading it to your project. Error: ${err.message}`);
+        }
       }
 
       const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
-      const renderRes = await fetch(`${backendUrl}/video-editor/render/start`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData
-      });
+      let renderRes;
+      try {
+        renderRes = await fetch(`${backendUrl}/video-editor/render/start`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData
+        });
+      } catch (err: any) {
+        console.error("Failed to contact backend render API:", err);
+        throw new Error(`Could not reach the rendering server. Please ensure the backend is running. Error: ${err.message}`);
+      }
 
       if (!renderRes.ok) {
         const errText = await renderRes.text();
@@ -5036,7 +5300,10 @@ export default function VideoEditorPage() {
                                   </button>
                                   <div className="flex-1 min-w-0">
                                     <p className="text-xs font-medium text-zinc-300 truncate">{audio.name || "Untitled Audio"}</p>
-                                    <p className="text-[9px] text-zinc-500 truncate">{audio.artist ? `by ${audio.artist}` : 'Preview or add to track'}</p>
+                                    <p className="text-[9px] text-zinc-500 truncate flex items-center">
+                                      {audio.artist ? `by ${audio.artist}` : 'Preview or add to track'}
+                                      <AudioDurationBadge url={audio.url} />
+                                    </p>
                                   </div>
                                   <button onClick={() => { 
                                       setAudioClips(prev => [...prev, {
@@ -5200,6 +5467,191 @@ export default function VideoEditorPage() {
                     ].map(social => (
                       <button key={social.name} onClick={() => handleAddDefaultLogo(social.url)} className="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg flex items-center justify-center transition-colors border border-transparent hover:border-indigo-500" title={social.name}>
                         <img src={social.url} alt={social.name} className="w-5 h-5 object-contain" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3 border-t border-zinc-800 pt-3">
+                  <p className="text-xs font-semibold text-zinc-500 uppercase">Festival Templates</p>
+                  <p className="text-[10px] text-zinc-400 mb-2">Pro graphics for special occasions. Click to overlay.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      {
+                        name: "Birthday",
+                        previewSvg: `<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#BF953F" /><stop offset="25%" stop-color="#FCF6BA" /><stop offset="50%" stop-color="#B38728" /><stop offset="75%" stop-color="#FBF5B7" /><stop offset="100%" stop-color="#AA771C" /></linearGradient></defs><rect x="40" y="40" width="1000" height="1840" fill="none" stroke="url(#gold)" stroke-width="15" rx="30"/><rect x="60" y="60" width="960" height="1800" fill="none" stroke="#ffffff" stroke-width="2" rx="20" stroke-dasharray="10 10"/><g transform="translate(540, 300)"><text x="0" y="0" font-family="'Playfair Display', serif, Arial" font-size="120" font-weight="900" fill="url(#gold)" text-anchor="middle" letter-spacing="10">HAPPY</text><text x="0" y="140" font-family="'Playfair Display', serif, Arial" font-size="140" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="5">BIRTHDAY</text></g><rect x="0" y="1500" width="1080" height="420" fill="url(#gold)" opacity="0.9"/><text x="540" y="1650" font-family="Arial" font-size="60" font-weight="bold" fill="#000" text-anchor="middle">Wishing You All The Best</text><text x="540" y="1730" font-family="Arial" font-size="40" fill="#333" text-anchor="middle">May your special day bring endless joy</text></svg>`,
+                        bgSvg: `<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#BF953F" /><stop offset="25%" stop-color="#FCF6BA" /><stop offset="50%" stop-color="#B38728" /><stop offset="75%" stop-color="#FBF5B7" /><stop offset="100%" stop-color="#AA771C" /></linearGradient></defs><rect x="40" y="40" width="1000" height="1840" fill="none" stroke="url(#gold)" stroke-width="15" rx="30"/><rect x="60" y="60" width="960" height="1800" fill="none" stroke="#ffffff" stroke-width="2" rx="20" stroke-dasharray="10 10"/><rect x="0" y="1500" width="1080" height="420" fill="url(#gold)" opacity="0.9"/></svg>`,
+                        images: [
+                          { url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80', left: 540, top: 1000, width: 800 },
+                          { url: 'https://cdn-icons-png.flaticon.com/512/1160/1160358.png', left: 180, top: 180, width: 150, isLogo: true }
+                        ],
+                        texts: [
+                          { text: "HAPPY", left: 540, top: 300, fontSize: 120, fontFamily: "Arial", fill: "#BF953F", fontWeight: "900" },
+                          { text: "BIRTHDAY", left: 540, top: 440, fontSize: 140, fontFamily: "Arial", fill: "#ffffff", fontWeight: "900" },
+                          { text: "Wishing You All The Best", left: 540, top: 1650, fontSize: 60, fontFamily: "Arial", fill: "#000000", fontWeight: "bold" },
+                          { text: "May your special day bring endless joy", left: 540, top: 1730, fontSize: 40, fontFamily: "Arial", fill: "#333333" }
+                        ]
+                      },
+                      {
+                        name: "Anniversary",
+                        previewSvg: `<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="rose" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#ff9a9e" /><stop offset="100%" stop-color="#fecfef" /></linearGradient></defs><rect x="50" y="50" width="980" height="1820" fill="none" stroke="url(#rose)" stroke-width="30"/><circle cx="540" cy="300" r="150" fill="url(#rose)" opacity="0.2"/><text x="540" y="280" font-family="'Great Vibes', cursive, serif" font-size="100" font-weight="bold" fill="#d81b60" text-anchor="middle">Happy</text><text x="540" y="380" font-family="Arial" font-size="70" font-weight="bold" fill="#ffffff" stroke="#d81b60" stroke-width="2" text-anchor="middle" letter-spacing="15">ANNIVERSARY</text><rect x="140" y="1600" width="800" height="200" fill="#ffffff" opacity="0.8" rx="100"/><text x="540" y="1690" font-family="Arial" font-size="50" fill="#d81b60" text-anchor="middle" font-style="italic">"A love story that never ends"</text><text x="540" y="1750" font-family="Arial" font-size="35" fill="#666" text-anchor="middle">Cheers to many more years together</text></svg>`,
+                        bgSvg: `<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="rose" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#ff9a9e" /><stop offset="100%" stop-color="#fecfef" /></linearGradient></defs><rect x="50" y="50" width="980" height="1820" fill="none" stroke="url(#rose)" stroke-width="30"/><circle cx="540" cy="300" r="150" fill="url(#rose)" opacity="0.2"/><rect x="140" y="1600" width="800" height="200" fill="#ffffff" opacity="0.8" rx="100"/></svg>`,
+                        images: [
+                          { url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80', left: 540, top: 1000, width: 700 },
+                          { url: 'https://cdn-icons-png.flaticon.com/512/1160/1160358.png', left: 180, top: 180, width: 150, isLogo: true }
+                        ],
+                        texts: [
+                          { text: "Happy", left: 540, top: 280, fontSize: 100, fontFamily: "Georgia", fill: "#d81b60", fontWeight: "bold" },
+                          { text: "ANNIVERSARY", left: 540, top: 380, fontSize: 70, fontFamily: "Arial", fill: "#ffffff", fontWeight: "bold" },
+                          { text: "\"A love story that never ends\"", left: 540, top: 1690, fontSize: 50, fontFamily: "Arial", fill: "#d81b60" },
+                          { text: "Cheers to many more years together", left: 540, top: 1750, fontSize: 35, fontFamily: "Arial", fill: "#666666" }
+                        ]
+                      },
+                      {
+                        name: "Dashain",
+                        previewSvg: `<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="dashainRed" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#dc2626" /><stop offset="100%" stop-color="#991b1b" /></linearGradient></defs><path d="M 0 0 L 1080 0 L 1080 400 Q 540 500 0 400 Z" fill="url(#dashainRed)" opacity="0.95"/><path d="M 0 1920 L 1080 1920 L 1080 1600 Q 540 1500 0 1600 Z" fill="url(#dashainRed)" opacity="0.95"/><circle cx="540" cy="200" r="120" fill="#facc15" opacity="0.3"/><text x="540" y="200" font-family="Arial" font-size="100" font-weight="bold" fill="#facc15" text-anchor="middle" letter-spacing="5">HAPPY DASHAIN</text><text x="540" y="280" font-family="Arial" font-size="40" fill="#ffffff" text-anchor="middle">May the goddess Durga bless you</text><text x="540" y="1720" font-family="Arial" font-size="60" font-weight="bold" fill="#facc15" text-anchor="middle">Subha Bijaya Dashami</text><text x="540" y="1800" font-family="Arial" font-size="35" fill="#ffffff" text-anchor="middle">Peace, Prosperity and Happiness</text></svg>`,
+                        bgSvg: `<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="dashainRed" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#dc2626" /><stop offset="100%" stop-color="#991b1b" /></linearGradient></defs><path d="M 0 0 L 1080 0 L 1080 400 Q 540 500 0 400 Z" fill="url(#dashainRed)" opacity="0.95"/><path d="M 0 1920 L 1080 1920 L 1080 1600 Q 540 1500 0 1600 Z" fill="url(#dashainRed)" opacity="0.95"/><circle cx="540" cy="200" r="120" fill="#facc15" opacity="0.3"/></svg>`,
+                        images: [
+                          { url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80', left: 540, top: 1000, width: 800 },
+                          { url: 'https://cdn-icons-png.flaticon.com/512/1160/1160358.png', left: 180, top: 180, width: 150, isLogo: true }
+                        ],
+                        texts: [
+                          { text: "HAPPY DASHAIN", left: 540, top: 200, fontSize: 100, fontFamily: "Arial", fill: "#facc15", fontWeight: "bold" },
+                          { text: "May the goddess Durga bless you", left: 540, top: 280, fontSize: 40, fontFamily: "Arial", fill: "#ffffff" },
+                          { text: "Subha Bijaya Dashami", left: 540, top: 1720, fontSize: 60, fontFamily: "Arial", fill: "#facc15", fontWeight: "bold" },
+                          { text: "Peace, Prosperity and Happiness", left: 540, top: 1800, fontSize: 35, fontFamily: "Arial", fill: "#ffffff" }
+                        ]
+                      },
+                      {
+                        name: "Tihar / Diwali",
+                        previewSvg: `<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fbbf24" stop-opacity="0.8"/><stop offset="100%" stop-color="#000000" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="1080" height="250" fill="#1e1e1e" opacity="0.9"/><circle cx="200" cy="100" r="60" fill="url(#glow)"/><circle cx="540" cy="120" r="100" fill="url(#glow)"/><circle cx="880" cy="100" r="60" fill="url(#glow)"/><text x="540" y="140" font-family="'Georgia', serif" font-size="90" font-weight="bold" fill="#fef3c7" text-anchor="middle">HAPPY TIHAR</text><rect x="0" y="1600" width="1080" height="320" fill="#1e1e1e" opacity="0.9"/><text x="540" y="1720" font-family="'Georgia', serif" font-size="70" fill="#fbbf24" text-anchor="middle" letter-spacing="8">HAPPY DIPAWALI</text><text x="540" y="1800" font-family="Arial" font-size="40" fill="#d1d5db" text-anchor="middle">Festival of Lights, Joy &amp; Prosperity</text></svg>`,
+                        bgSvg: `<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fbbf24" stop-opacity="0.8"/><stop offset="100%" stop-color="#000000" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="1080" height="250" fill="#1e1e1e" opacity="0.9"/><circle cx="200" cy="100" r="60" fill="url(#glow)"/><circle cx="540" cy="120" r="100" fill="url(#glow)"/><circle cx="880" cy="100" r="60" fill="url(#glow)"/><rect x="0" y="1600" width="1080" height="320" fill="#1e1e1e" opacity="0.9"/></svg>`,
+                        images: [
+                          { url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80', left: 540, top: 1000, width: 800 },
+                          { url: 'https://cdn-icons-png.flaticon.com/512/1160/1160358.png', left: 180, top: 180, width: 150, isLogo: true }
+                        ],
+                        texts: [
+                          { text: "HAPPY TIHAR", left: 540, top: 140, fontSize: 90, fontFamily: "Georgia", fill: "#fef3c7", fontWeight: "bold" },
+                          { text: "HAPPY DIPAWALI", left: 540, top: 1720, fontSize: 70, fontFamily: "Georgia", fill: "#fbbf24", fontWeight: "bold" },
+                          { text: "Festival of Lights, Joy & Prosperity", left: 540, top: 1800, fontSize: 40, fontFamily: "Arial", fill: "#d1d5db" }
+                        ]
+                      },
+                      {
+                        name: "Holi",
+                        previewSvg: `<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"><circle cx="200" cy="200" r="150" fill="#ec4899" opacity="0.6" filter="blur(20px)"/><circle cx="800" cy="300" r="200" fill="#3b82f6" opacity="0.6" filter="blur(20px)"/><circle cx="500" cy="1700" r="250" fill="#eab308" opacity="0.6" filter="blur(30px)"/><circle cx="900" cy="1600" r="180" fill="#22c55e" opacity="0.6" filter="blur(20px)"/><path d="M 0 0 L 1080 0 L 1080 300 Q 540 400 0 300 Z" fill="#ffffff" opacity="0.9"/><text x="540" y="180" font-family="'Impact', sans-serif" font-size="120" fill="#db2777" text-anchor="middle" letter-spacing="10">HAPPY HOLI</text><text x="540" y="260" font-family="Arial" font-size="40" font-weight="bold" fill="#1d4ed8" text-anchor="middle">May your life be as colorful as this festival!</text><rect x="100" y="1650" width="880" height="150" fill="#ffffff" opacity="0.9" rx="75"/><text x="540" y="1740" font-family="Arial" font-size="60" font-weight="900" fill="#ea580c" text-anchor="middle">Play Safe, Spread Love</text></svg>`,
+                        bgSvg: `<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"><circle cx="200" cy="200" r="150" fill="#ec4899" opacity="0.6" filter="blur(20px)"/><circle cx="800" cy="300" r="200" fill="#3b82f6" opacity="0.6" filter="blur(20px)"/><circle cx="500" cy="1700" r="250" fill="#eab308" opacity="0.6" filter="blur(30px)"/><circle cx="900" cy="1600" r="180" fill="#22c55e" opacity="0.6" filter="blur(20px)"/><path d="M 0 0 L 1080 0 L 1080 300 Q 540 400 0 300 Z" fill="#ffffff" opacity="0.9"/><rect x="100" y="1650" width="880" height="150" fill="#ffffff" opacity="0.9" rx="75"/></svg>`,
+                        images: [
+                          { url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80', left: 540, top: 1000, width: 800 },
+                          { url: 'https://cdn-icons-png.flaticon.com/512/1160/1160358.png', left: 180, top: 180, width: 150, isLogo: true }
+                        ],
+                        texts: [
+                          { text: "HAPPY HOLI", left: 540, top: 180, fontSize: 120, fontFamily: "Arial", fill: "#db2777", fontWeight: "900" },
+                          { text: "May your life be as colorful as this festival!", left: 540, top: 260, fontSize: 40, fontFamily: "Arial", fill: "#1d4ed8", fontWeight: "bold" },
+                          { text: "Play Safe, Spread Love", left: 540, top: 1740, fontSize: 60, fontFamily: "Arial", fill: "#ea580c", fontWeight: "900" }
+                        ]
+                      },
+                      {
+                        name: "Buddha Jayanti",
+                        previewSvg: `<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="peace" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#fdfbfb" /><stop offset="100%" stop-color="#ebedee" /></linearGradient></defs><rect x="20" y="20" width="1040" height="1880" fill="none" stroke="#d4d4d8" stroke-width="10"/><rect x="140" y="100" width="800" height="250" fill="url(#peace)" opacity="0.9" rx="20"/><text x="540" y="200" font-family="'Georgia', serif" font-size="80" font-weight="bold" fill="#b45309" text-anchor="middle">BUDDHA JAYANTI</text><text x="540" y="280" font-family="Arial" font-size="35" fill="#71717a" text-anchor="middle" font-style="italic">Peace comes from within.</text><rect x="0" y="1600" width="1080" height="320" fill="#f8fafc" opacity="0.95"/><circle cx="540" cy="1600" r="100" fill="#fef3c7" /><text x="540" y="1740" font-family="'Georgia', serif" font-size="50" font-weight="bold" fill="#b45309" text-anchor="middle">Happy Buddha Purnima</text><text x="540" y="1820" font-family="Arial" font-size="35" fill="#52525b" text-anchor="middle">May the teachings of Lord Buddha guide you</text></svg>`,
+                        bgSvg: `<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="peace" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#fdfbfb" /><stop offset="100%" stop-color="#ebedee" /></linearGradient></defs><rect x="20" y="20" width="1040" height="1880" fill="none" stroke="#d4d4d8" stroke-width="10"/><rect x="140" y="100" width="800" height="250" fill="url(#peace)" opacity="0.9" rx="20"/><rect x="0" y="1600" width="1080" height="320" fill="#f8fafc" opacity="0.95"/><circle cx="540" cy="1600" r="100" fill="#fef3c7" /></svg>`,
+                        images: [
+                          { url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80', left: 540, top: 1000, width: 800 },
+                          { url: 'https://cdn-icons-png.flaticon.com/512/1160/1160358.png', left: 180, top: 180, width: 150, isLogo: true }
+                        ],
+                        texts: [
+                          { text: "BUDDHA JAYANTI", left: 540, top: 200, fontSize: 80, fontFamily: "Georgia", fill: "#b45309", fontWeight: "bold" },
+                          { text: "Peace comes from within.", left: 540, top: 280, fontSize: 35, fontFamily: "Arial", fill: "#71717a" },
+                          { text: "Happy Buddha Purnima", left: 540, top: 1740, fontSize: 50, fontFamily: "Georgia", fill: "#b45309", fontWeight: "bold" },
+                          { text: "May the teachings of Lord Buddha guide you", left: 540, top: 1820, fontSize: 35, fontFamily: "Arial", fill: "#52525b" }
+                        ]
+                      }
+                    ].map(template => (
+                      <button 
+                        key={template.name} 
+                        onClick={() => {
+                          if (!fabricCanvasRef.current) return;
+                          const canvasObj = fabricCanvasRef.current;
+                          const endTime = Math.min(globalTime + 5, totalDuration);
+                          const scaleX = canvasObj.width! / 1080;
+                          const scaleY = canvasObj.height! / 1920;
+                          const scaleMin = Math.min(scaleX, scaleY);
+                          
+                          fabric.Image.fromURL(`data:image/svg+xml;utf8,${encodeURIComponent(template.bgSvg)}`, (img) => {
+                            img.set({ 
+                              scaleX: scaleX,
+                              scaleY: scaleY,
+                              left: canvasObj.width! / 2, 
+                              top: canvasObj.height! / 2, 
+                              originX: 'center', 
+                              originY: 'center' 
+                            });
+                            (img as any).id = `img-${Date.now()}`;
+                            (img as any).startTime = globalTime;
+                            (img as any).endTime = endTime;
+                            canvasObj.add(img);
+
+                            template.texts.forEach((tCfg: any, i: number) => {
+                              const textObj = new fabric.IText(tCfg.text, {
+                                left: canvasObj.width! / 2 + (tCfg.left - 540) * scaleX,
+                                top: canvasObj.height! / 2 + (tCfg.top - 960) * scaleY,
+                                fontFamily: tCfg.fontFamily,
+                                fill: tCfg.fill,
+                                fontSize: tCfg.fontSize * scaleMin,
+                                fontWeight: tCfg.fontWeight || "normal",
+                                originX: 'center',
+                                originY: 'center'
+                              });
+                              (textObj as any).id = `txt-${Date.now()}-${i}`;
+                              (textObj as any).startTime = globalTime;
+                              (textObj as any).endTime = endTime;
+                              canvasObj.add(textObj);
+                            });
+
+                            if ((template as any).images) {
+                              (template as any).images.forEach((imgCfg: any, i: number) => {
+                                fabric.Image.fromURL(imgCfg.url, (placeholderImg) => {
+                                  placeholderImg.set({
+                                    left: canvasObj.width! / 2 + (imgCfg.left - 540) * scaleX,
+                                    top: canvasObj.height! / 2 + (imgCfg.top - 960) * scaleY,
+                                    originX: 'center',
+                                    originY: 'center'
+                                  });
+                                  if (imgCfg.width) {
+                                    if (imgCfg.isLogo) {
+                                      placeholderImg.scaleToWidth(imgCfg.width * scaleX);
+                                    } else {
+                                      const minDim = Math.min(placeholderImg.width!, placeholderImg.height!);
+                                      const targetScale = (imgCfg.width * scaleX) / minDim;
+                                      placeholderImg.set({
+                                        scaleX: targetScale,
+                                        scaleY: targetScale,
+                                        clipPath: new fabric.Circle({
+                                          radius: minDim / 2,
+                                          originX: 'center',
+                                          originY: 'center'
+                                        })
+                                      });
+                                    }
+                                  }
+                                  (placeholderImg as any).id = `img-placeholder-${Date.now()}-${i}`;
+                                  (placeholderImg as any).startTime = globalTime;
+                                  (placeholderImg as any).endTime = endTime;
+                                  canvasObj.add(placeholderImg);
+                                  canvasObj.renderAll();
+                                }, { crossOrigin: 'anonymous' });
+                              });
+                            }
+                            
+                            canvasObj.renderAll();
+                          }, { crossOrigin: 'anonymous' });
+                        }} 
+                        className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg flex flex-col items-center gap-2 transition-colors border border-transparent hover:border-indigo-500 group overflow-hidden" 
+                        title={template.name}
+                      >
+                        <div className="w-full h-24 bg-zinc-900 rounded relative flex items-center justify-center p-1">
+                          <img src={`data:image/svg+xml;utf8,${encodeURIComponent(template.previewSvg)}`} alt={template.name} className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform" />
+                        </div>
+                        <span className="text-[10px] font-semibold text-zinc-300">{template.name}</span>
                       </button>
                     ))}
                   </div>
@@ -5494,7 +5946,7 @@ export default function VideoEditorPage() {
                 maxHeight: 'calc(100% - 16px)'
               }}
             >
-              {clips.length > 0 ? (
+              { (clips.length > 0 || audioClips.length > 0 || canvasAssets.filter(a => a.id !== 'video-proxy').length > 0) ? (
                 <>
                   {[...activeClips].sort((a, b) => {
                       const aIdx = videoTracks.findIndex(t => t.id === a.trackId);
@@ -5513,117 +5965,16 @@ export default function VideoEditorPage() {
                     const hasFilter = clip.brightness !== 0 || clip.contrast !== 1 || clip.saturate !== 1 || clip.sepia !== 0 || clip.hueRotate !== 0;
                     const filterStr = hasFilter ? `brightness(${1 + clip.brightness}) contrast(${clip.contrast}) saturate(${clip.saturate}) sepia(${clip.sepia}) hue-rotate(${clip.hueRotate}deg)` : undefined;
                     
-                    let animScaleX = 1;
-                    let animScaleY = 1;
-                    let animRotate = 0;
-                    let animX = 0;
-                    let animY = 0;
-
-                    if (clip.animationType && clip.animationType !== "none") {
-                      const speed = clip.animationSpeed || 1.0;
-                      const intensity = clip.animationIntensity || 1.0;
+                    const activeAnims = clip.animations?.length ? clip.animations : 
+                      (clip.animationType && clip.animationType !== "none" ? [{ type: clip.animationType, speed: clip.animationSpeed, intensity: clip.animationIntensity } as AnimationDef] : []);
                       
-                      switch(clip.animationType) {
-                        case "pulse":
-                          animScaleX = animScaleY = 1 + Math.sin(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
-                          break;
-                        case "wiggle":
-                          animRotate = Math.sin(localTime * Math.PI * 2 * speed) * 15 * intensity;
-                          break;
-                        case "float":
-                          animY = Math.sin(localTime * Math.PI * 2 * speed) * 10 * intensity;
-                          break;
-                        case "spin":
-                        case "spin-cw":
-                          animRotate = localTime * 360 * speed;
-                          break;
-                        case "spin-ccw":
-                          animRotate = -localTime * 360 * speed;
-                          break;
-                        case "blink":
-                          previewOpacity *= (Math.floor(localTime * 4 * speed) % 2 === 0) ? Math.max(0, 1 - 0.5 * intensity) : 1;
-                          break;
-                        case "slide-in-left":
-                          if (localTime < 1 / speed) animX = -100 + (localTime * speed * 100);
-                          break;
-                        case "slide-in-right":
-                          if (localTime < 1 / speed) animX = 100 - (localTime * speed * 100);
-                          break;
-                        case "slide-in-bottom":
-                          if (localTime < 1 / speed) animY = 100 - (localTime * speed * 100);
-                          break;
-                        case "slide-in-top":
-                          if (localTime < 1 / speed) animY = -100 + (localTime * speed * 100);
-                          break;
-                        case "zoom-in":
-                          animScaleX = animScaleY = 1 + (localTime * speed * 0.1 * intensity);
-                          break;
-                        case "zoom-out":
-                          animScaleX = animScaleY = Math.max(0, 1.2 - (localTime * speed * 0.1 * intensity));
-                          break;
-                        case "shake":
-                          animX = (Math.sin(localTime * 20 * speed) + Math.sin(localTime * 35 * speed)) * 5 * intensity;
-                          animY = (Math.cos(localTime * 25 * speed) + Math.sin(localTime * 40 * speed)) * 5 * intensity;
-                          break;
-                        case "ken-burns":
-                          animScaleX = animScaleY = 1 + (localTime * speed * 0.05 * intensity);
-                          animX = (localTime * speed * 5 * intensity);
-                          animY = (localTime * speed * 2 * intensity);
-                          break;
-                        case "heartbeat":
-                          const beat = (localTime * speed) % 1;
-                          animScaleX = animScaleY = 1 + (beat < 0.2 ? Math.sin(beat * 5 * Math.PI) * 0.2 * intensity : (beat > 0.3 && beat < 0.5 ? Math.sin((beat - 0.3) * 5 * Math.PI) * 0.2 * intensity : 0));
-                          break;
-                        case "pop-in":
-                          if (localTime < 1/speed) {
-                             const t = localTime * speed;
-                             animScaleX = animScaleY = 1 + Math.sin(t * Math.PI * 3) * Math.exp(-t * 5) * intensity;
-                          }
-                          break;
-                        case '3d-flip-h': animScaleX = Math.cos(localTime * Math.PI * 2 * speed); break;
-                        case '3d-flip-v': animScaleY = Math.cos(localTime * Math.PI * 2 * speed); break;
-                        case '3d-wobble': 
-                          animScaleX = 1 + Math.sin(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
-                          animScaleY = 1 + Math.cos(localTime * Math.PI * 2 * speed) * 0.1 * intensity;
-                          break;
-                        case 'pass-through-lr':
-                          const durLR = clip.duration;
-                          if (localTime < 1/speed) animX = -100 + (localTime * speed * 100);
-                          else if (localTime > durLR - 1/speed) animX = (localTime - (durLR - 1/speed)) * speed * 100;
-                          break;
-                        case 'pass-through-rl':
-                          const durRL = clip.duration;
-                          if (localTime < 1/speed) animX = 100 - (localTime * speed * 100);
-                          else if (localTime > durRL - 1/speed) animX = -(localTime - (durRL - 1/speed)) * speed * 100;
-                          break;
-                        case 'pass-through-tb':
-                          const durTB = clip.duration;
-                          if (localTime < 1/speed) animY = -100 + (localTime * speed * 100);
-                          else if (localTime > durTB - 1/speed) animY = (localTime - (durTB - 1/speed)) * speed * 100;
-                          break;
-                        case 'pass-through-bt':
-                          const durBT = clip.duration;
-                          if (localTime < 1/speed) animY = 100 - (localTime * speed * 100);
-                          else if (localTime > durBT - 1/speed) animY = -(localTime - (durBT - 1/speed)) * speed * 100;
-                          break;
-                        case 'pro-whip-pan':
-                          animX = -100 * Math.exp(-localTime * speed * 12) * intensity;
-                          break;
-                        case 'pro-elastic':
-                          const tE2 = localTime * speed;
-                          animScaleX = animScaleY = 1 - Math.exp(-tE2 * 6) * Math.cos(tE2 * 15) * intensity;
-                          break;
-                        case 'pro-push':
-                          animScaleX = animScaleY = 1 + (localTime * speed * 0.02 * intensity);
-                          break;
-                        case 'pro-slider-left':
-                          animX = -(localTime * speed * 2 * intensity);
-                          break;
-                        case 'pro-slider-right':
-                          animX = (localTime * speed * 2 * intensity);
-                          break;
-                      }
-                    }
+                    const animProps = computeAnimationOffsets(activeAnims, localTime, clip.duration);
+                    let animScaleX = animProps.scaleX;
+                    let animScaleY = animProps.scaleY;
+                    let animRotate = animProps.rotate;
+                    let animX = animProps.x;
+                    let animY = animProps.y;
+                    previewOpacity *= animProps.opacityMultiplier;
 
                     const hasTransform = clip.x !== 0 || clip.y !== 0 || clip.videoZoom !== 1 || animScaleX !== 1 || animScaleY !== 1 || animRotate !== 0 || animX !== 0 || animY !== 0;
                     const transformStr = hasTransform 
@@ -5770,10 +6121,22 @@ export default function VideoEditorPage() {
                       ref={(el) => { if (el) audioRefs.current[audio.id] = el; else delete audioRefs.current[audio.id]; }}
                       src={audio.url}
                       className="hidden"
-                      crossOrigin="anonymous"
+                      preload="auto"
                       onLoadedMetadata={(e) => {
                           const dur = e.currentTarget.duration;
-                          if (!isNaN(dur) && audio.fileDuration === 0) {
+                          if (!isNaN(dur) && dur > 0 && audio.fileDuration === 0) {
+                              setAudioClips(prev => prev.map(a => a.id === audio.id ? { ...a, fileDuration: dur, trimEnd: dur, duration: dur } : a));
+                          }
+                      }}
+                      onDurationChange={(e) => {
+                          const dur = e.currentTarget.duration;
+                          if (!isNaN(dur) && dur > 0 && audio.fileDuration === 0) {
+                              setAudioClips(prev => prev.map(a => a.id === audio.id ? { ...a, fileDuration: dur, trimEnd: dur, duration: dur } : a));
+                          }
+                      }}
+                      onCanPlay={(e) => {
+                          const dur = e.currentTarget.duration;
+                          if (!isNaN(dur) && dur > 0 && audio.fileDuration === 0) {
                               setAudioClips(prev => prev.map(a => a.id === audio.id ? { ...a, fileDuration: dur, trimEnd: dur, duration: dur } : a));
                           }
                       }}
@@ -5809,9 +6172,9 @@ export default function VideoEditorPage() {
                 <canvas id="fabric-canvas" />
               </div>
 
-              {/* Floating Crop Button */}
+              {/* Floating Image Actions */}
               {selectedObj && selectedObj.type === "image" && !selectedObj.id?.toString().startsWith('video-') && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20">
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
                   <button onClick={() => {
                     setCropTargetObj(selectedObj as fabric.Image);
                     setCropImageUrl((selectedObj as fabric.Image).getSrc());
@@ -5820,6 +6183,11 @@ export default function VideoEditorPage() {
                     <CropIcon className="w-4 h-4" />
                     Crop Image
                   </button>
+                  <label className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white text-xs font-semibold rounded-full shadow-xl flex items-center gap-2 transition-all hover:scale-105 border border-pink-400/30 cursor-pointer">
+                    <ImageIcon className="w-4 h-4" />
+                    Replace
+                    <input type="file" accept="image/*" className="hidden" onChange={handleReplaceImage} />
+                  </label>
                 </div>
               )}
             </div>
@@ -6371,96 +6739,14 @@ export default function VideoEditorPage() {
                   </div>
 
                   {/* FABRIC ANIMATIONS */}
-                  <div className="pt-4 border-t border-zinc-800 space-y-3">
-                    <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Sparkles className="w-3 h-3" /> Animations</p>
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-zinc-300">Animation Style</label>
-                      <select 
-                        value={(activeFabricObj as any).animationType || "none"} 
-                        onChange={e => {
-                          (activeFabricObj as any).animationType = e.target.value;
-                          fabricCanvasRef.current?.renderAll();
-                          refreshAssets();
-                        }} 
-                        className="w-full bg-zinc-800 text-zinc-200 text-sm rounded-md px-2 py-1.5 border border-zinc-700 focus:outline-none"
-                      >
-                        <option value="none">None</option>
-                        <optgroup label="Continuous">
-                          <option value="pulse">Pulse (Scale)</option>
-                          <option value="wiggle">Wiggle (Rotate)</option>
-                          <option value="float">Float (Up/Down)</option>
-                          <option value="spin-cw">Spin Clockwise</option>
-                          <option value="spin-ccw">Spin Anti-Clockwise</option>
-                          <option value="blink">Blink (Flash)</option>
-                        </optgroup>
-                        <optgroup label="In / Out (Broadcast)">
-                          <option value="slide-in-left">Slide In (Left)</option>
-                          <option value="slide-in-right">Slide In (Right)</option>
-                          <option value="slide-in-bottom">Slide In (Bottom)</option>
-                          <option value="slide-in-top">Slide In (Top)</option>
-                        </optgroup>
-                        <optgroup label="Zoom">
-                          <option value="zoom-in">Zoom In</option>
-                          <option value="zoom-out">Zoom Out</option>
-                        </optgroup>
-                        <optgroup label="Cinematic & Advanced">
-                          <option value="shake">Camera Shake</option>
-                          <option value="ken-burns">Ken Burns (Pan & Zoom)</option>
-                          <option value="heartbeat">Heartbeat</option>
-                          <option value="pop-in">Pop In (Bounce)</option>
-                        </optgroup>
-                        <optgroup label="3D & Perspective">
-                          <option value="3d-flip-h">3D Coin Flip (Horizontal)</option>
-                          <option value="3d-flip-v">3D Coin Flip (Vertical)</option>
-                          <option value="3d-wobble">3D Jello Wobble</option>
-                        </optgroup>
-                        <optgroup label="Pass Through">
-                          <option value="pass-through-lr">Pass Through (Left to Right)</option>
-                          <option value="pass-through-rl">Pass Through (Right to Left)</option>
-                          <option value="pass-through-tb">Pass Through (Top to Bottom)</option>
-                          <option value="pass-through-bt">Pass Through (Bottom to Top)</option>
-                        </optgroup>
-                        <optgroup label="Pro Essentials">
-                          <option value="pro-whip-pan">Whip Pan (Fast Snap)</option>
-                          <option value="pro-elastic">Elastic Pop (Overshoot)</option>
-                          <option value="pro-push">Cinematic Push (Slow Dolly)</option>
-                          <option value="pro-slider-left">Cinematic Slider (Left)</option>
-                          <option value="pro-slider-right">Cinematic Slider (Right)</option>
-                          <option value="pro-glitch">Digital Glitch</option>
-                          <option value="pro-pan-up">Pedestal Up</option>
-                          <option value="pro-pan-down">Pedestal Down</option>
-                        </optgroup>
-                      </select>
-                    </div>
-                    {(activeFabricObj as any).animationType && (activeFabricObj as any).animationType !== "none" && (
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-2 bg-indigo-500/5 p-3 rounded-md border border-indigo-500/10">
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[10px]">
-                            <label className="font-medium text-zinc-300">Speed</label>
-                            <span className="text-zinc-500 tabular-nums">{(activeFabricObj as any).animationSpeed || 1.0}x</span>
-                          </div>
-                          <input 
-                            type="range" min={0.1} max={5.0} step={0.1} 
-                            value={(activeFabricObj as any).animationSpeed || 1.0} 
-                            onChange={(e) => { (activeFabricObj as any).animationSpeed = +e.target.value; fabricCanvasRef.current?.renderAll(); refreshAssets(); }} 
-                            className="w-full h-1.5 accent-indigo-500" 
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[10px]">
-                            <label className="font-medium text-zinc-300">Intensity</label>
-                            <span className="text-zinc-500 tabular-nums">{(activeFabricObj as any).animationIntensity || 1.0}x</span>
-                          </div>
-                          <input 
-                            type="range" min={0.1} max={5.0} step={0.1} 
-                            value={(activeFabricObj as any).animationIntensity || 1.0} 
-                            onChange={(e) => { (activeFabricObj as any).animationIntensity = +e.target.value; fabricCanvasRef.current?.renderAll(); refreshAssets(); }} 
-                            className="w-full h-1.5 accent-indigo-500" 
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <AnimationListUI 
+                    animations={(activeFabricObj as any).animations || []} 
+                    onChange={newAnims => { 
+                      (activeFabricObj as any).animations = newAnims; 
+                      fabricCanvasRef.current?.renderAll(); 
+                      refreshAssets(); 
+                    }} 
+                  />
 
                 </div>
               );
@@ -6763,92 +7049,11 @@ export default function VideoEditorPage() {
                   </div>
                 </div>
 
-                {/* TICKER ANIMATIONS */}
-                <div className="border-t border-zinc-800 pt-4 space-y-3">
-                  <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Sparkles className="w-3 h-3" /> Animations</p>
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-zinc-300">Animation Style</label>
-                    <select 
-                      value={selectedClip.animationType || "none"} 
-                      onChange={e => updateSelectedClip({ animationType: e.target.value as any })} 
-                      className="w-full bg-zinc-800 text-zinc-200 text-sm rounded-md px-2 py-1.5 border border-zinc-700 focus:outline-none"
-                    >
-                      <option value="none">None</option>
-                      <optgroup label="Continuous">
-                        <option value="pulse">Pulse (Scale)</option>
-                        <option value="wiggle">Wiggle (Rotate)</option>
-                        <option value="float">Float (Up/Down)</option>
-                        <option value="spin-cw">Spin Clockwise</option>
-                          <option value="spin-ccw">Spin Anti-Clockwise</option>
-                        <option value="blink">Blink (Flash)</option>
-                      </optgroup>
-                      <optgroup label="In / Out (Broadcast)">
-                        <option value="slide-in-left">Slide In (Left)</option>
-                        <option value="slide-in-right">Slide In (Right)</option>
-                        <option value="slide-in-bottom">Slide In (Bottom)</option>
-                        <option value="slide-in-top">Slide In (Top)</option>
-                      </optgroup>
-                      <optgroup label="Zoom">
-                        <option value="zoom-in">Zoom In</option>
-                        <option value="zoom-out">Zoom Out</option>
-                      </optgroup>
-                      <optgroup label="Cinematic & Advanced">
-                        <option value="shake">Camera Shake</option>
-                        <option value="ken-burns">Ken Burns (Pan & Zoom)</option>
-                        <option value="heartbeat">Heartbeat</option>
-                        <option value="pop-in">Pop In (Bounce)</option>
-                      </optgroup>
-                      <optgroup label="3D & Perspective">
-                        <option value="3d-flip-h">3D Coin Flip (Horizontal)</option>
-                        <option value="3d-flip-v">3D Coin Flip (Vertical)</option>
-                        <option value="3d-wobble">3D Jello Wobble</option>
-                      </optgroup>
-                      <optgroup label="Pass Through">
-                        <option value="pass-through-lr">Pass Through (Left to Right)</option>
-                        <option value="pass-through-rl">Pass Through (Right to Left)</option>
-                        <option value="pass-through-tb">Pass Through (Top to Bottom)</option>
-                        <option value="pass-through-bt">Pass Through (Bottom to Top)</option>
-                      </optgroup>
-                      <optgroup label="Pro Essentials">
-                        <option value="pro-whip-pan">Whip Pan (Fast Snap)</option>
-                        <option value="pro-elastic">Elastic Pop (Overshoot)</option>
-                        <option value="pro-push">Cinematic Push (Slow Dolly)</option>
-                        <option value="pro-slider-left">Cinematic Slider (Left)</option>
-                        <option value="pro-slider-right">Cinematic Slider (Right)</option>
-                        <option value="pro-glitch">Digital Glitch</option>
-                        <option value="pro-pan-up">Pedestal Up</option>
-                        <option value="pro-pan-down">Pedestal Down</option>
-                      </optgroup>
-                    </select>
-                  </div>
-                  {selectedClip.animationType && selectedClip.animationType !== "none" && (
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-2 bg-indigo-500/5 p-3 rounded-md border border-indigo-500/10">
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-[10px]">
-                          <label className="font-medium text-zinc-300">Speed</label>
-                          <span className="text-zinc-500 tabular-nums">{selectedClip.animationSpeed || 1.0}x</span>
-                        </div>
-                        <input 
-                          type="range" min={0.1} max={5.0} step={0.1} 
-                          value={selectedClip.animationSpeed || 1.0} 
-                          onChange={(e) => updateSelectedClip({ animationSpeed: +e.target.value })} 
-                          className="w-full h-1.5 accent-indigo-500" 
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-[10px]">
-                          <label className="font-medium text-zinc-300">Intensity</label>
-                          <span className="text-zinc-500 tabular-nums">{selectedClip.animationIntensity || 1.0}x</span>
-                        </div>
-                        <input 
-                          type="range" min={0.1} max={5.0} step={0.1} 
-                          value={selectedClip.animationIntensity || 1.0} 
-                          onChange={(e) => updateSelectedClip({ animationIntensity: +e.target.value })} 
-                          className="w-full h-1.5 accent-indigo-500" 
-                        />
-                      </div>
-                    </div>
-                  )}
+                <div className="border-t border-zinc-800 pt-4 mt-4">
+                  <AnimationListUI 
+                    animations={selectedClip.animations || []} 
+                    onChange={newAnims => updateSelectedClip({ animations: newAnims })} 
+                  />
                 </div>
 
               </div>
@@ -7088,95 +7293,11 @@ export default function VideoEditorPage() {
                   </div>
                 </div>
 
-                <div className="border-t border-zinc-800 pt-4 space-y-4 mt-4">
-                  <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Sparkles className="w-3 h-3" /> Animations</p>
-                  
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-zinc-300">Animation Style</label>
-                      <select 
-                        value={selectedClip.animationType || "none"} 
-                        onChange={e => updateSelectedClip({ animationType: e.target.value as any })} 
-                        className="w-full bg-zinc-800 text-zinc-200 text-sm rounded-md px-2 py-1.5 border border-zinc-700 focus:outline-none"
-                      >
-                        <option value="none">None</option>
-                        <optgroup label="Continuous">
-                          <option value="pulse">Pulse (Scale)</option>
-                          <option value="wiggle">Wiggle (Rotate)</option>
-                          <option value="float">Float (Up/Down)</option>
-                          <option value="spin-cw">Spin Clockwise</option>
-                          <option value="spin-ccw">Spin Anti-Clockwise</option>
-                          <option value="blink">Blink (Flash)</option>
-                        </optgroup>
-                        <optgroup label="In / Out (Broadcast)">
-                          <option value="slide-in-left">Slide In (Left)</option>
-                          <option value="slide-in-right">Slide In (Right)</option>
-                          <option value="slide-in-bottom">Slide In (Bottom)</option>
-                          <option value="slide-in-top">Slide In (Top)</option>
-                        </optgroup>
-                        <optgroup label="Zoom">
-                          <option value="zoom-in">Zoom In</option>
-                          <option value="zoom-out">Zoom Out</option>
-                        </optgroup>
-                        <optgroup label="Cinematic & Advanced">
-                          <option value="shake">Camera Shake</option>
-                          <option value="ken-burns">Ken Burns (Pan & Zoom)</option>
-                          <option value="heartbeat">Heartbeat</option>
-                          <option value="pop-in">Pop In (Bounce)</option>
-                        </optgroup>
-                        <optgroup label="3D & Perspective">
-                          <option value="3d-flip-h">3D Coin Flip (Horizontal)</option>
-                          <option value="3d-flip-v">3D Coin Flip (Vertical)</option>
-                          <option value="3d-wobble">3D Jello Wobble</option>
-                        </optgroup>
-                        <optgroup label="Pass Through">
-                          <option value="pass-through-lr">Pass Through (Left to Right)</option>
-                          <option value="pass-through-rl">Pass Through (Right to Left)</option>
-                          <option value="pass-through-tb">Pass Through (Top to Bottom)</option>
-                          <option value="pass-through-bt">Pass Through (Bottom to Top)</option>
-                        </optgroup>
-                        <optgroup label="Pro Essentials">
-                          <option value="pro-whip-pan">Whip Pan (Fast Snap)</option>
-                          <option value="pro-elastic">Elastic Pop (Overshoot)</option>
-                          <option value="pro-push">Cinematic Push (Slow Dolly)</option>
-                          <option value="pro-slider-left">Cinematic Slider (Left)</option>
-                          <option value="pro-slider-right">Cinematic Slider (Right)</option>
-                          <option value="pro-glitch">Digital Glitch</option>
-                          <option value="pro-pan-up">Pedestal Up</option>
-                          <option value="pro-pan-down">Pedestal Down</option>
-                        </optgroup>
-                      </select>
-                    </div>
-
-                    {selectedClip.animationType && selectedClip.animationType !== "none" && (
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-2 bg-indigo-500/5 p-3 rounded-md border border-indigo-500/10">
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[10px]">
-                            <label className="font-medium text-zinc-300">Speed</label>
-                            <span className="text-zinc-500 tabular-nums">{selectedClip.animationSpeed || 1.0}x</span>
-                          </div>
-                          <input 
-                            type="range" min={0.1} max={5.0} step={0.1} 
-                            value={selectedClip.animationSpeed || 1.0} 
-                            onChange={(e) => updateSelectedClip({ animationSpeed: +e.target.value })} 
-                            className="w-full h-1.5 accent-indigo-500" 
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[10px]">
-                            <label className="font-medium text-zinc-300">Intensity</label>
-                            <span className="text-zinc-500 tabular-nums">{selectedClip.animationIntensity || 1.0}x</span>
-                          </div>
-                          <input 
-                            type="range" min={0.1} max={5.0} step={0.1} 
-                            value={selectedClip.animationIntensity || 1.0} 
-                            onChange={(e) => updateSelectedClip({ animationIntensity: +e.target.value })} 
-                            className="w-full h-1.5 accent-indigo-500" 
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                <div className="border-t border-zinc-800 pt-4 mt-4">
+                  <AnimationListUI 
+                    animations={selectedClip.animations || []} 
+                    onChange={newAnims => updateSelectedClip({ animations: newAnims })} 
+                  />
                 </div>
 
                 <div className="border-t border-zinc-800 pt-4 space-y-4">
@@ -7628,20 +7749,64 @@ export default function VideoEditorPage() {
                     <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
                     <span className="text-[9px] text-indigo-400 font-bold">{track.name}</span>
                     
-                    <div className="flex gap-1.5 mt-0.5 relative z-30">
+                    <div className="flex gap-1 mt-0.5 relative z-30 flex-wrap justify-center px-1">
                       <button 
                         onClick={() => setVideoTracks(videoTracks.map(t => t.id === track.id ? { ...t, isHidden: !t.isHidden } : t))}
-                        className={`hover:text-white transition-colors ${track.isHidden ? 'text-zinc-600' : 'text-zinc-400'}`}
+                        className={`hover:text-white transition-colors p-0.5 ${track.isHidden ? 'text-zinc-600' : 'text-zinc-400'}`}
                         title={track.isHidden ? "Show Track" : "Hide Track"}
                       >
                         {track.isHidden ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                       </button>
                       <button 
                         onClick={() => setVideoTracks(videoTracks.map(t => t.id === track.id ? { ...t, isMuted: !t.isMuted } : t))}
-                        className={`hover:text-white transition-colors ${track.isMuted ? 'text-red-400' : 'text-zinc-400'}`}
+                        className={`hover:text-white transition-colors p-0.5 ${track.isMuted ? 'text-red-400' : 'text-zinc-400'}`}
                         title={track.isMuted ? "Unmute Track" : "Mute Track"}
                       >
                         {track.isMuted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                      </button>
+                      <div className="w-full h-px bg-zinc-800/50 my-0.5"></div>
+                      <button 
+                        onClick={() => {
+                          const trackClips = clips.filter(c => c.trackId === track.id);
+                          if (trackClips.length > 0) setSelectedClipIds(trackClips.map(c => c.id));
+                        }}
+                        className="hover:text-indigo-400 transition-colors p-0.5 text-zinc-400"
+                        title="Select All Clips in Track"
+                      >
+                        <MousePointerSquareDashed className="w-3 h-3" />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          let targetIds = selectedClipIds;
+                          const trackClips = clips.filter(c => c.trackId === track.id);
+                          if (targetIds.length === 0 || !targetIds.some(id => trackClips.some(c => c.id === id))) {
+                              targetIds = trackClips.map(c => c.id);
+                          } else {
+                              targetIds = targetIds.filter(id => trackClips.some(c => c.id === id));
+                          }
+                          if (targetIds.length === 0) return;
+                          
+                          const sortedIds = trackClips.filter(c => targetIds.includes(c.id))
+                                                      .sort((a, b) => a.startTime - b.startTime)
+                                                      .map(c => c.id);
+                          
+                          setClips(prev => {
+                             let currentTime = 0;
+                             const updated = [...prev];
+                             for (const sid of sortedIds) {
+                                const idx = updated.findIndex(c => c.id === sid);
+                                if (idx !== -1) {
+                                   updated[idx] = { ...updated[idx], startTime: currentTime };
+                                   currentTime += updated[idx].duration;
+                                }
+                             }
+                             return updated;
+                          });
+                        }}
+                        className="hover:text-green-400 transition-colors p-0.5 text-zinc-400"
+                        title="Arrange Clips Sequentially (Fit)"
+                      >
+                        <AlignLeft className="w-3 h-3" />
                       </button>
                     </div>
 
@@ -7899,15 +8064,52 @@ export default function VideoEditorPage() {
 
             {/* CANVAS ASSETS TRACK */}
             <div className="min-h-12 bg-zinc-900/50 rounded-lg border border-zinc-800/50 flex relative">
-              <div className="w-14 shrink-0 bg-zinc-900 border-r border-zinc-800 flex flex-col items-center justify-center z-10 rounded-l-lg gap-0.5">
+              <div className="w-14 shrink-0 bg-zinc-900 border-r border-zinc-800 flex flex-col items-center justify-center z-10 rounded-l-lg gap-0.5 relative group">
                 <Layers className="w-3.5 h-3.5 text-amber-400" />
                 <span className="text-[9px] text-amber-400 font-bold">ASSETS</span>
+                <div className="absolute inset-x-0 bottom-0 top-0 flex flex-col items-center justify-center gap-1 bg-zinc-900 opacity-0 group-hover:opacity-100 transition-opacity rounded-l-lg z-20">
+                  {canvasAssets.length > 0 && (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedAssetIds(canvasAssets.map(a => a.id));
+                        if (canvasAssets.length > 0) setSelectedAssetId(canvasAssets[canvasAssets.length-1].id);
+                      }}
+                      className="w-11 h-5 bg-zinc-800 hover:bg-zinc-700 text-[8px] font-bold tracking-wider text-zinc-300 hover:text-white rounded border border-zinc-700 flex items-center justify-center transition-colors"
+                      title="Select All Assets"
+                    >
+                      ALL
+                    </button>
+                  )}
+                  {selectedAssetIds.length > 0 && (
+                    <button 
+                      onClick={(e) => {
+                          e.stopPropagation();
+                          const canvas = fabricCanvasRef.current;
+                          if (!canvas) return;
+                          selectedAssetIds.forEach(id => {
+                              const asset = canvasAssets.find(a => a.id === id);
+                              if (asset && asset.obj) {
+                                  (asset.obj as any).startTime = 0;
+                                  (asset.obj as any).endTime = Math.max(10, totalDuration);
+                              }
+                          });
+                          refreshAssets();
+                          showToast(`Fitted ${selectedAssetIds.length} object${selectedAssetIds.length > 1 ? 's' : ''} to track`, "success");
+                      }}
+                      className="w-11 h-5 bg-amber-500/20 hover:bg-amber-500 text-[8px] font-bold tracking-wider text-amber-400 hover:text-white rounded border border-amber-500/50 flex items-center justify-center transition-colors"
+                      title="Fit selected objects to full track length"
+                    >
+                      FIT
+                    </button>
+                  )}
+                </div>
               </div>
               <div id="asset-tracks-container" className="flex-1 relative overflow-hidden p-1 min-h-[48px]">
                 {canvasAssets.map(asset => {
                   const leftPct = (asset.startTime / (totalDuration || 1)) * 100;
                   const widthPct = ((asset.endTime - asset.startTime) / (totalDuration || 1)) * 100;
-                  const isSelected = selectedAssetId === asset.id;
+                  const isSelected = selectedAssetIds.includes(asset.id);
                   
                   return (
                     <div 
@@ -7916,7 +8118,15 @@ export default function VideoEditorPage() {
                         e.stopPropagation();
                         setSelectedClipIds([]);
                         setSelectedAudioClipId(null);
-                        setSelectedAssetId(asset.id);
+                        
+                        if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                           setSelectedAssetIds(prev => prev.includes(asset.id) ? prev.filter(id => id !== asset.id) : [...prev, asset.id]);
+                           setSelectedAssetId(asset.id);
+                        } else {
+                           setSelectedAssetIds([asset.id]);
+                           setSelectedAssetId(asset.id);
+                        }
+                        
                         setActiveTab("adjust");
                         if (asset.obj) {
                           fabricCanvasRef.current?.setActiveObject(asset.obj);
@@ -7949,6 +8159,9 @@ export default function VideoEditorPage() {
                           setSelectedClipIds([]);
                           setSelectedAudioClipId(null);
                           setSelectedAssetId(asset.id);
+                          if (!selectedAssetIds.includes(asset.id)) {
+                             setSelectedAssetIds([asset.id]);
+                          }
                           if (asset.obj) {
                             fabricCanvasRef.current?.setActiveObject(asset.obj);
                             setSelectedObj(asset.obj);
@@ -7972,6 +8185,7 @@ export default function VideoEditorPage() {
                           fabricCanvasRef.current?.remove(asset.obj);
                           fabricCanvasRef.current?.renderAll();
                           if (selectedAssetId === asset.id) setSelectedAssetId(null);
+                          setSelectedAssetIds(prev => prev.filter(id => id !== asset.id));
                           refreshAssets();
                         }} 
                         className="ml-auto w-4 h-4 rounded hover:bg-red-600 text-zinc-400 hover:text-white flex items-center justify-center transition-colors shrink-0 z-20"
@@ -7986,6 +8200,9 @@ export default function VideoEditorPage() {
                           setSelectedClipIds([]);
                           setSelectedAudioClipId(null);
                           setSelectedAssetId(asset.id);
+                          if (!selectedAssetIds.includes(asset.id)) {
+                             setSelectedAssetIds([asset.id]);
+                          }
                           if (asset.obj) {
                             fabricCanvasRef.current?.setActiveObject(asset.obj);
                             setSelectedObj(asset.obj);

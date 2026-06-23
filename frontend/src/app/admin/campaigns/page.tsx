@@ -26,6 +26,7 @@ export default function CampaignsPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [clients, setClients] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   const [formData, setFormData] = useState<{name: string, description: string, client_id?: string}>({ name: "", description: "" });
   const [clientFilter, setClientFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -53,7 +54,10 @@ export default function CampaignsPage() {
           headers: { Authorization: `Bearer ${token}` }
         })
           .then(res => res.ok ? res.json() : [])
-          .then(data => setClients(data.filter((u: any) => u.role === 'CLIENT')))
+          .then(data => {
+            setAllUsers(data);
+            setClients(data.filter((u: any) => u.role === 'CLIENT'));
+          })
           .catch(console.error);
       }
     }
@@ -149,6 +153,7 @@ export default function CampaignsPage() {
             <TableRow>
               <TableHead>Campaign Name</TableHead>
               {user?.role !== 'CLIENT' && <TableHead>Client</TableHead>}
+              {user?.role === 'ADMIN' && <TableHead>Managed By</TableHead>}
               <TableHead>Status</TableHead>
               <TableHead>Budget</TableHead>
               <TableHead>ROI</TableHead>
@@ -176,16 +181,26 @@ export default function CampaignsPage() {
                     <div className="text-xs text-zinc-500 truncate max-w-xs">{camp.description}</div>
                   </TableCell>
                   {user?.role !== 'CLIENT' && (
-                    <TableCell className="text-zinc-600">
+                    <TableCell className="text-zinc-600 dark:text-zinc-400">
                       {clients.find(c => c.id === camp.client_id)?.email || "Unassigned"}
+                    </TableCell>
+                  )}
+                  {user?.role === 'ADMIN' && (
+                    <TableCell className="text-zinc-600 dark:text-zinc-400">
+                      {(() => {
+                        const client = clients.find(c => c.id === camp.client_id);
+                        if (!client || !client.manager_id) return <span className="text-zinc-400 dark:text-zinc-500 italic">Unassigned</span>;
+                        const manager = allUsers.find(u => u.id === client.manager_id);
+                        return manager ? manager.email : <span className="text-zinc-400 dark:text-zinc-500 italic">Unknown</span>;
+                      })()}
                     </TableCell>
                   )}
                   <TableCell>
                     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border ${
-                      camp.status === 'ACTIVE' ? 'bg-green-100 text-green-800 border-green-200' :
-                      camp.status === 'PAUSED' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-                      camp.status === 'COMPLETED' ? 'bg-indigo-100 text-indigo-800 border-indigo-200' :
-                      'bg-zinc-100 text-zinc-800 border-zinc-200'
+                      camp.status === 'ACTIVE' ? 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800/50' :
+                      camp.status === 'PAUSED' ? 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800/50' :
+                      camp.status === 'COMPLETED' ? 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-800/50' :
+                      'bg-zinc-800 text-white border-zinc-700 dark:bg-zinc-200 dark:text-zinc-900 dark:border-zinc-300'
                     }`}>
                       {camp.status || 'DRAFT'}
                     </span>

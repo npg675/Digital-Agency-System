@@ -207,6 +207,16 @@ def create_user(user_in: UserCreate, db: Session = Depends(get_db), current_user
         details=f"Created {new_user.role} user {new_user.email}"
     )
 
+    if manager_id and str(manager_id) != str(current_user.id):
+        from app.models.notification import Notification
+        db.add(Notification(
+            user_id=manager_id,
+            type="CLIENT_ASSIGNED",
+            message=f"You have been assigned as the Account Manager for new client {new_user.first_name or new_user.email}.",
+            reference_id=str(new_user.id)
+        ))
+        db.commit()
+
     return new_user
 
 @router.patch("/{user_id}", response_model=UserResponse)
@@ -239,7 +249,12 @@ def update_user(user_id: UUID, user_in: UserUpdate, db: Session = Depends(get_db
     if user_in.password:
         user.hashed_password = get_password_hash(user_in.password)
     
+    old_manager_id = user.manager_id
+    manager_changed = False
+    
     if "manager_id" in user_in.model_fields_set and current_user.role == UserRole.ADMIN:
+        if user.manager_id != user_in.manager_id:
+            manager_changed = True
         user.manager_id = user_in.manager_id  # Can be None (to unassign)
         
     update_data = user_in.model_dump(exclude_unset=True, exclude={"password", "manager_id"})
@@ -250,6 +265,16 @@ def update_user(user_id: UUID, user_in: UserUpdate, db: Session = Depends(get_db
         
     db.commit()
     db.refresh(user)
+
+    if manager_changed and user.manager_id and str(user.manager_id) != str(current_user.id):
+        from app.models.notification import Notification
+        db.add(Notification(
+            user_id=user.manager_id,
+            type="CLIENT_ASSIGNED",
+            message=f"You have been assigned as the Account Manager for {user.first_name or user.email}.",
+            reference_id=str(user.id)
+        ))
+        db.commit()
 
     log_activity(
         db=db,

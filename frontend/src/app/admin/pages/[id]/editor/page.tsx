@@ -13,6 +13,7 @@ import { ABTestingModal } from "@/components/editor/ABTestingModal";
 import { MediaLibraryDrawer } from "@/components/editor/MediaLibraryDrawer";
 import { SEOAnalyzerDrawer } from "@/components/editor/SEOAnalyzerDrawer";
 import { AssetShelf } from "@/components/editor/AssetShelf";
+import { useWarnIfUnsavedChanges } from "@/hooks/useWarnIfUnsavedChanges";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
@@ -25,7 +26,10 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     pageName, pageSlug, pageStatus, sections,
     isSaving, setIsSaving, setPageStatus,
     activeSectionId, updateSection,
+    hasUnsavedChanges, setHasUnsavedChanges,
   } = useEditorStore();
+
+  useWarnIfUnsavedChanges(hasUnsavedChanges);
 
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,6 +98,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       });
       if (res.ok) {
         setSaveMsg("Saved!");
+        setHasUnsavedChanges(false);
         setTimeout(() => setSaveMsg(null), 3000);
       } else {
         setSaveMsg("Save failed");

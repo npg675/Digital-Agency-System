@@ -155,7 +155,7 @@ export function SEOAnalyzerDrawer({ isOpen, onClose }: Props) {
               {/* Score Display */}
               <div className="flex flex-col items-center justify-center p-6 bg-zinc-900 border border-zinc-800 rounded-xl relative overflow-hidden">
                 {/* Background glow based on score */}
-                <div className={\`absolute inset-0 opacity-20 \${score >= 80 ? 'bg-emerald-500' : score >= 50 ? 'bg-amber-500' : 'bg-red-500'}\`} style={{ filter: 'blur(40px)' }} />
+                <div className={`absolute inset-0 opacity-20 ${score >= 80 ? 'bg-emerald-500' : score >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ filter: 'blur(40px)' }} />
                 
                 <div className="relative flex flex-col items-center">
                   <div className="text-5xl font-black text-white tracking-tighter mb-1">
@@ -212,7 +212,7 @@ export function SEOAnalyzerDrawer({ isOpen, onClose }: Props) {
 
 function ChecklistItem({ title, passed, hint }: { title: string, passed: boolean, hint: string }) {
   return (
-    <div className={\`p-3 rounded-lg border \${passed ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-zinc-800/50 border-zinc-700'}\`}>
+    <div className={`p-3 rounded-lg border ${passed ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-zinc-800/50 border-zinc-700'}`}>
       <div className="flex items-start gap-2">
         {passed ? (
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
@@ -220,7 +220,7 @@ function ChecklistItem({ title, passed, hint }: { title: string, passed: boolean
           <AlertCircle className="w-4 h-4 text-zinc-500 shrink-0 mt-0.5" />
         )}
         <div>
-          <p className={\`text-sm font-medium \${passed ? 'text-emerald-300' : 'text-zinc-300'}\`}>{title}</p>
+          <p className={`text-sm font-medium ${passed ? 'text-emerald-300' : 'text-zinc-300'}`}>{title}</p>
           {!passed && <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">{hint}</p>}
         </div>
       </div>
