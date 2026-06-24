@@ -152,6 +152,8 @@ async def remove_background(
         raise HTTPException(status_code=500, detail="rembg package not installed on server.")
     except Exception as e:
         traceback.print_exc()
+        with open("bg_error.log", "a") as f:
+            f.write(traceback.format_exc() + "\n")
         raise HTTPException(status_code=500, detail=f"Background Removal Error: {str(e)}")
 
 @router.post("/social-caption")
@@ -588,3 +590,5 @@ Return ONLY valid JSON. No markdown formatting, no backticks, no explanations.
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+

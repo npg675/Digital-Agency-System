@@ -8,6 +8,7 @@ class MarketingAssetType(str, enum.Enum):
     AD_COPY = "AD_COPY"
     LEAD_MAGNET = "LEAD_MAGNET"
     LANDING_PAGE_COPY = "LANDING_PAGE_COPY"
+    VIDEO = "VIDEO"
     OTHER = "OTHER"
 
 class StepType(str, enum.Enum):

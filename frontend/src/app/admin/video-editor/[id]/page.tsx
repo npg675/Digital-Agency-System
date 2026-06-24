@@ -10,8 +10,8 @@ import {
   Play, Pause, SkipBack, Scissors, Type, Music, Image as ImageIcon,
   Download, Loader2, ArrowLeft, Volume2, Save, Undo, Redo, Plus, Trash2,
   SlidersHorizontal, CloudUpload, HardDrive, Upload, Sparkles, X, Layers,
-  Keyboard, Magnet, Undo2, Redo2, Eye, EyeOff, VolumeX, Link2, Rewind, FastForward, Wand2, PenTool, Shapes, Square, Circle, Triangle, Eraser, Printer, Maximize, Maximize2, MousePointer2, Crop as CropIcon, Settings,
-  Folder, FolderOpen, ChevronUp, ChevronRight, Film, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine, ListChecks, ArrowLeftToLine, ArrowRightToLine, AlignLeft, MousePointerSquareDashed
+  Keyboard, Magnet, Undo2, Redo2, Eye, EyeOff, VolumeX, Link2, Rewind, FastForward, Wand2, PenTool, Shapes, Square, Circle, Triangle, Eraser, Printer, Maximize, Maximize2, Minimize2, MousePointer2, Crop as CropIcon, Settings,
+  Folder, FolderOpen, ChevronUp, ChevronRight, Film, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine, ListChecks, ArrowLeftToLine, ArrowRightToLine, AlignLeft, MousePointerSquareDashed, Lock, Unlock
 } from "lucide-react";
 import ReactCrop, { type Crop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
@@ -89,6 +89,20 @@ export interface AnimationDef {
   intensity: number;
 }
 
+export interface KeyframeDef {
+  id: string;
+  time: number;
+  properties: {
+    x?: number;
+    y?: number;
+    videoZoom?: number;
+    videoScaleY?: number;
+    opacity?: number;
+    rotation?: number;
+  };
+  easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+}
+
 // --- VideoClip type ---
 type VideoClip = {
   id: string;
@@ -107,6 +121,7 @@ type VideoClip = {
   x: number;
   y: number;
   videoZoom: number;
+  videoScaleY?: number;
   brightness: number;
   contrast: number;
   saturate: number;
@@ -140,8 +155,10 @@ type VideoClip = {
   animationIntensity?: number; // 0.1 to 5.0 (multiplier)
   animations?: AnimationDef[];
   // Transitions
-  transitionType?: "none" | "fade" | "wipeleft" | "wiperight" | "slideleft" | "slideright" | "circlecrop" | "pixelize" | "dissolve" | "flash-white" | "zoom-in";
+  transitionType?: "none" | "fade" | "wipeleft" | "wiperight" | "slideleft" | "slideright" | "circlecrop" | "pixelize" | "dissolve" | "flash-white" | "zoom-in" | "cross-zoom" | "film-burn" | "glitch" | "whip-pan";
   transitionDuration?: number;
+  cinematicEffect?: "none" | "film-grain" | "vignette" | "letterbox" | "rgb-split";
+  keyframes?: KeyframeDef[];
 };
 
 export type AnimationDef = {
@@ -270,14 +287,14 @@ const AnimationListUI = ({ animations, onChange }: { animations: AnimationDef[],
                     <label className="font-medium text-zinc-400">Speed</label>
                     <span className="text-zinc-500 tabular-nums">{anim.speed.toFixed(1)}x</span>
                   </div>
-                  <input type="range" min={0.1} max={5.0} step={0.1} value={anim.speed} onChange={e => updateAnimation(idx, { speed: +e.target.value })} className="w-full h-1 accent-indigo-500" />
+                  <input type="range" min={0.1} max={5.0} step={0.1} value={Number.isNaN(anim.speed) ? 1 : anim.speed} onChange={e => updateAnimation(idx, { speed: +e.target.value })} className="w-full h-1 accent-indigo-500" />
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between text-[9px]">
                     <label className="font-medium text-zinc-400">Intensity</label>
                     <span className="text-zinc-500 tabular-nums">{anim.intensity.toFixed(1)}x</span>
                   </div>
-                  <input type="range" min={0.1} max={5.0} step={0.1} value={anim.intensity} onChange={e => updateAnimation(idx, { intensity: +e.target.value })} className="w-full h-1 accent-indigo-500" />
+                  <input type="range" min={0.1} max={5.0} step={0.1} value={Number.isNaN(anim.intensity) ? 1 : anim.intensity} onChange={e => updateAnimation(idx, { intensity: +e.target.value })} className="w-full h-1 accent-indigo-500" />
                 </div>
               </div>
             )}
@@ -286,6 +303,158 @@ const AnimationListUI = ({ animations, onChange }: { animations: AnimationDef[],
       </div>
     </div>
   );
+};
+
+export const KeyframeListUI = ({
+  keyframes,
+  onChange,
+  currentTime,
+  currentProps
+}: {
+  keyframes: KeyframeDef[],
+  onChange: (k: KeyframeDef[]) => void,
+  currentTime: number,
+  currentProps: { x?: number, y?: number, videoZoom?: number, videoScaleY?: number, opacity?: number, rotation?: number }
+}) => {
+  const kfs = keyframes || [];
+
+  const addKeyframe = () => {
+    const existingIdx = kfs.findIndex(k => Math.abs(k.time - currentTime) < 0.1);
+    if (existingIdx !== -1) {
+      const next = [...kfs];
+      next[existingIdx] = { ...next[existingIdx], properties: { ...next[existingIdx].properties, ...currentProps } };
+      onChange(next.sort((a,b) => a.time - b.time));
+    } else {
+      onChange([...kfs, { id: Math.random().toString(36).substring(7), time: currentTime, properties: { ...currentProps } }].sort((a,b) => a.time - b.time));
+    }
+  };
+
+  const removeKeyframe = (idx: number) => {
+    const next = [...kfs];
+    next.splice(idx, 1);
+    onChange(next);
+  };
+
+  const updateKeyframeProp = (idx: number, prop: keyof KeyframeDef['properties'], val: number) => {
+    const next = [...kfs];
+    next[idx].properties = { ...next[idx].properties, [prop]: val };
+    onChange(next);
+  };
+
+  const updateKeyframeEasing = (idx: number, val: KeyframeDef['easing']) => {
+    const next = [...kfs];
+    next[idx].easing = val;
+    onChange(next);
+  };
+
+  return (
+    <div className="pt-4 border-t border-zinc-800 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5"><ListChecks className="w-3 h-3" /> Keyframes</p>
+        <button onClick={addKeyframe} className="text-[10px] bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 px-2 py-1 rounded transition-colors flex items-center gap-1">
+          <Plus className="w-3 h-3" /> Add at {currentTime.toFixed(1)}s
+        </button>
+      </div>
+
+      {kfs.length === 0 && (
+        <div className="text-center py-4 text-zinc-600 text-xs border border-dashed border-zinc-800 rounded-md bg-zinc-900/50">
+          No keyframes applied.<br/>Move the playhead and click "Add".
+        </div>
+      )}
+
+      <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+        {kfs.map((kf, idx) => (
+          <div key={kf.id} className="bg-zinc-800/50 rounded-md border border-zinc-700/50 p-2 space-y-2 relative group">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-400/10 px-1.5 py-0.5 rounded">
+                {kf.time.toFixed(2)}s
+              </span>
+              <div className="flex items-center gap-2">
+                <select 
+                  value={kf.easing || 'linear'} 
+                  onChange={e => updateKeyframeEasing(idx, e.target.value as any)}
+                  className="bg-zinc-900 text-zinc-400 text-[10px] rounded border border-zinc-700 px-1 py-0.5 focus:outline-none"
+                >
+                  <option value="linear">Linear</option>
+                  <option value="ease-in">Ease In</option>
+                  <option value="ease-out">Ease Out</option>
+                  <option value="ease-in-out">Ease In-Out</option>
+                </select>
+                <button onClick={() => removeKeyframe(idx)} className="text-zinc-500 hover:text-red-400">
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {(['x', 'y', 'videoZoom', 'videoScaleY', 'opacity', 'rotation'] as const).map(prop => (
+                kf.properties[prop] !== undefined && (
+                  <div key={prop} className="flex flex-col gap-1">
+                    <label className="text-[9px] text-zinc-400 capitalize">{prop === 'videoZoom' ? 'Scale X' : prop === 'videoScaleY' ? 'Scale Y' : prop}</label>
+                    <input 
+                      type="number" 
+                      step={prop === 'opacity' || prop === 'videoZoom' || prop === 'videoScaleY' ? 0.05 : 1}
+                      value={Number.isNaN(kf.properties[prop]) ? "" : (kf.properties[prop] ?? 0)}
+                      onChange={e => updateKeyframeProp(idx, prop, parseFloat(e.target.value))}
+                      className="bg-zinc-900 text-zinc-200 text-xs rounded border border-zinc-700 px-1.5 py-1 focus:outline-none focus:border-emerald-500 w-full"
+                    />
+                  </div>
+                )
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export const interpolateKeyframes = (
+  keyframes: KeyframeDef[] | undefined,
+  localTime: number,
+  baseProps: { x?: number, y?: number, videoZoom?: number, videoScaleY?: number, opacity?: number, rotation?: number }
+) => {
+  if (!keyframes || keyframes.length === 0) return baseProps;
+
+  const sorted = [...keyframes].sort((a, b) => a.time - b.time);
+  
+  if (localTime <= sorted[0].time) {
+    return { ...baseProps, ...sorted[0].properties };
+  }
+  
+  if (localTime >= sorted[sorted.length - 1].time) {
+    return { ...baseProps, ...sorted[sorted.length - 1].properties };
+  }
+
+  const nextIdx = sorted.findIndex(k => k.time > localTime);
+  const prevKf = sorted[nextIdx - 1];
+  const nextKf = sorted[nextIdx];
+
+  let progress = (localTime - prevKf.time) / (nextKf.time - prevKf.time);
+  if (prevKf.easing === 'ease-in') {
+    progress = progress * progress * progress;
+  } else if (prevKf.easing === 'ease-out') {
+    progress = 1 - Math.pow(1 - progress, 3);
+  } else if (prevKf.easing === 'ease-in-out') {
+    progress = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+  }
+  const interpolated = { ...baseProps };
+  const propsToInterpolate = ['x', 'y', 'videoZoom', 'videoScaleY', 'opacity', 'rotation'] as const;
+  
+  propsToInterpolate.forEach(prop => {
+    const prevVal = prevKf.properties[prop];
+    const nextVal = nextKf.properties[prop];
+    
+    if (prevVal !== undefined && nextVal !== undefined) {
+      interpolated[prop] = prevVal + (nextVal - prevVal) * progress;
+    } else if (prevVal !== undefined) {
+      interpolated[prop] = prevVal;
+    } else if (nextVal !== undefined) {
+      interpolated[prop] = nextVal;
+    }
+  });
+
+  return interpolated;
 };
 
 export const computeAnimationOffsets = (animations: AnimationDef[], localTime: number, duration: number) => {
@@ -453,6 +622,9 @@ const ASPECT_RATIOS = [
 // --- Color Filter Presets ---
 const COLOR_FILTERS = [
   { id: "none",      label: "Original",   brightness: 0,    contrast: 1,    saturate: 1,    sepia: 0,    hueRotate: 0   },
+  { id: "teal_orange", label: "Teal & Orange", brightness: 0, contrast: 1.15, saturate: 1.2, sepia: 0.2, hueRotate: -15 },
+  { id: "kodak",     label: "Kodak Film", brightness: 0.05, contrast: 1.1, saturate: 0.85, sepia: 0.3, hueRotate: 0 },
+  { id: "bleach_bypass", label: "Bleach Bypass", brightness: -0.1, contrast: 1.4, saturate: 0.4, sepia: 0.1, hueRotate: 0 },
   { id: "vivid",     label: "Vivid",      brightness: 0.1,  contrast: 1.2,  saturate: 1.5,  sepia: 0,    hueRotate: 0   },
   { id: "cinematic", label: "Cinematic",  brightness: -0.1, contrast: 1.15, saturate: 0.8,  sepia: 0.15, hueRotate: 5   },
   { id: "vintage",   label: "Vintage",    brightness: -0.1, contrast: 0.9,  saturate: 0.7,  sepia: 0.4,  hueRotate: 0   },
@@ -1002,6 +1174,7 @@ export default function VideoEditorPage() {
     audioVolume?: number;
 
     canvasJson: object | null;
+    aspectRatio?: any;
   };
   const [drafts, setDrafts] = useState<VideoDraft[]>([]);
   const [showDraftsModal, setShowDraftsModal] = useState(false);
@@ -1175,10 +1348,54 @@ export default function VideoEditorPage() {
   
   // Multi-clip state
   const [videoTracks, setVideoTracks] = useState<VideoTrack[]>([{ id: "v1", name: "V1" }]);
-  const [clips, setClips, historyState] = useHistory<VideoClip[]>([], 50);
+  const isUndoRedoRef = useRef(false);
+  const [globalHistory, setGlobalHistory, globalHistoryControls] = useHistory<{
+    clips: VideoClip[];
+    audioClips: AudioClip[];
+    canvasJson: object | null;
+  }>({ clips: [], audioClips: [], canvasJson: null }, 50);
+
+  const clips = globalHistory.clips;
+  const audioClips = globalHistory.audioClips;
+
+  const historyState = useMemo(() => ({
+    undo: () => {
+      isUndoRedoRef.current = true;
+      globalHistoryControls.undo();
+    },
+    redo: () => {
+      isUndoRedoRef.current = true;
+      globalHistoryControls.redo();
+    },
+    canUndo: globalHistoryControls.canUndo,
+    canRedo: globalHistoryControls.canRedo,
+    setWithoutHistory: (action: any) => {
+      globalHistoryControls.setWithoutHistory((prev) => {
+        const nextClips = typeof action === 'function' ? action(prev.clips) : action;
+        if (nextClips === prev.clips) return prev;
+        return { ...prev, clips: nextClips };
+      });
+    }
+  }), [globalHistoryControls]);
+
+  const setClips = useCallback((action: any) => {
+    setGlobalHistory(prev => {
+      const nextClips = typeof action === 'function' ? action(prev.clips) : action;
+      if (nextClips === prev.clips) return prev;
+      return { ...prev, clips: nextClips };
+    });
+  }, [setGlobalHistory]);
+
+  const setAudioClips = useCallback((action: any) => {
+    setGlobalHistory(prev => {
+      const nextAudioClips = typeof action === 'function' ? action(prev.audioClips) : action;
+      if (nextAudioClips === prev.audioClips) return prev;
+      return { ...prev, audioClips: nextAudioClips };
+    });
+  }, [setGlobalHistory]);
+
   const [videoUrl, setVideoUrl] = useState<string | null>(null);   // currently playing clip URL
   const [originalVideoUrl, setOriginalVideoUrl] = useState<string | null>(null); // kept for single-clip compat
-  const [audioClips, setAudioClips, audioHistoryState] = useHistory<AudioClip[]>([], 50);
   const [selectedAudioClipId, setSelectedAudioClipId] = useState<string | null>(null);
 
   const [audioDragState, setAudioDragState] = useState<{
@@ -1193,10 +1410,10 @@ export default function VideoEditorPage() {
     initialTotalDuration: number;
   } | null>(null);
   // Canvas assets list (for Assets panel)
-  const [canvasAssets, setCanvasAssets] = useState<{ id: string; label: string; obj: fabric.Object; startTime: number; endTime: number; animationType?: string; animationSpeed?: number; animationIntensity?: number; animations?: AnimationDef[] }[]>([]);
+  const [canvasAssets, setCanvasAssets] = useState<{ id: string; label: string; obj: fabric.Object; startTime: number; endTime: number; animationType?: string; animationSpeed?: number; animationIntensity?: number; animations?: AnimationDef[]; isHidden?: boolean }[]>([]);
   const refreshAssets = useCallback(() => {
     if (!fabricCanvasRef.current) return;
-    const objects = fabricCanvasRef.current.getObjects();
+    const objects = fabricCanvasRef.current.getObjects().filter((o: any) => !(o.id === 'video-proxy' || (typeof o.id === 'string' && o.id.startsWith('video-proxy-'))));
     setCanvasAssets(objects.map((o: any, i: number) => {
       const id = (o as any).id || "";
       let label = `Object ${i + 1}`;
@@ -1232,9 +1449,38 @@ export default function VideoEditorPage() {
         animationSpeed: (o as any).animationSpeed || 1.0,
         animationIntensity: (o as any).animationIntensity || 1.0,
         animations: (o as any).animations || [],
+        keyframes: (o as any).keyframes || [],
+        isHidden: (o as any).userHidden === true,
       };
     }));
   }, []);
+
+  const saveCanvasState = useCallback(() => {
+    if (fabricCanvasRef.current && !isUndoRedoRef.current) {
+      setGlobalHistory(prev => {
+        const nextJson = fabricCanvasRef.current!.toJSON();
+        // Since we can't easily deep-compare JSON objects efficiently here, 
+        // stringifying is okay for canvas because it's relatively small.
+        if (JSON.stringify(prev.canvasJson) === JSON.stringify(nextJson)) return prev;
+        return { ...prev, canvasJson: nextJson };
+      });
+    }
+  }, [setGlobalHistory]);
+
+  useEffect(() => {
+    if (isUndoRedoRef.current) {
+      if (fabricCanvasRef.current && globalHistory.canvasJson) {
+        fabricCanvasRef.current.loadFromJSON(globalHistory.canvasJson, () => {
+          fabricCanvasRef.current!.renderAll();
+          refreshAssets();
+        });
+      } else if (fabricCanvasRef.current && !globalHistory.canvasJson) {
+        fabricCanvasRef.current.clear();
+        refreshAssets();
+      }
+      isUndoRedoRef.current = false;
+    }
+  }, [globalHistory.canvasJson, refreshAssets]);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [assetDragState, setAssetDragState] = useState<{
@@ -1298,6 +1544,47 @@ export default function VideoEditorPage() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showNewProjectConfirm, setShowNewProjectConfirm] = useState(false);
   const [timelineZoom, setTimelineZoom] = useState(1);
+  const [timelineHeight, setTimelineHeight] = useState(250);
+  const [isTimelineLocked, setIsTimelineLocked] = useState(false);
+  const [isAutoFit, setIsAutoFit] = useState(true);
+
+  // Auto-fit timeline height based on tracks
+  useEffect(() => {
+    if (isAutoFit && !isTimelineLocked) {
+      // Toolbar(36) + Ruler(40) + Padding/Misc(40) + Audio(44) + Assets(44) = ~204 base
+      const baseHeight = 204; 
+      const calcHeight = baseHeight + (videoTracks.length * 52);
+      const maxSafeHeight = typeof window !== 'undefined' ? window.innerHeight * 0.65 : 600;
+      setTimelineHeight(Math.min(calcHeight, maxSafeHeight));
+    }
+  }, [isAutoFit, isTimelineLocked, videoTracks.length]);
+
+  const isDraggingTimelineRef = useRef(false);
+  const timelineStartYRef = useRef(0);
+  const timelineStartHeightRef = useRef(0);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingTimelineRef.current) return;
+      e.preventDefault();
+      const deltaY = timelineStartYRef.current - e.clientY;
+      const newHeight = timelineStartHeightRef.current + deltaY;
+      const clampedHeight = Math.max(150, Math.min(newHeight, window.innerHeight * 0.8));
+      setTimelineHeight(clampedHeight);
+    };
+    const handleMouseUp = () => {
+      if (isDraggingTimelineRef.current) {
+        isDraggingTimelineRef.current = false;
+        document.body.style.cursor = 'default';
+      }
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
 
   // FFmpeg loading status
   const [ffmpegStatus, setFfmpegStatus] = useState("Initialising engine…");
@@ -1350,32 +1637,36 @@ export default function VideoEditorPage() {
         preserveObjectStacking: true,
       });
       // Track selected object for text controls
-      initCanvas.on("selection:created", (e) => { 
-        setSelectedObj(e.selected?.[0] ?? null); 
-        refreshAssets(); 
-        if (e.selected && e.selected.length > 0 && e.selected[0].id !== 'video-proxy') {
-           setSelectedClipIds([]);
-           setActiveTab("adjust");
-           const id = e.selected[0].id || "";
-           setSelectedAssetId(id);
-           if (id.startsWith("txt-")) setLeftPanel("text");
-           else if (id.startsWith("stk-")) setLeftPanel("stickers");
-           else if (id.startsWith("shp-")) setLeftPanel("shapes");
+      const handleSelection = (e: any) => {
+        const selected = e.selected || [];
+        
+        // Skip handling if it's just video proxies
+        if (selected.length > 0 && selected[0].id?.startsWith('video-proxy-')) return;
+        
+        if (selected.length === 0) {
+           setSelectedObj(null);
+           refreshAssets();
+           return;
         }
-      });
-      initCanvas.on("selection:updated", (e) => { 
-        setSelectedObj(e.selected?.[0] ?? null); 
-        refreshAssets(); 
-        if (e.selected && e.selected.length > 0 && e.selected[0].id !== 'video-proxy') {
-           setSelectedClipIds([]);
-           setActiveTab("adjust");
-           const id = e.selected[0].id || "";
-           setSelectedAssetId(id);
-           if (id.startsWith("txt-")) setLeftPanel("text");
-           else if (id.startsWith("stk-")) setLeftPanel("stickers");
-           else if (id.startsWith("shp-")) setLeftPanel("shapes");
+        
+        setSelectedObj(selected.length === 1 ? selected[0] : (fabricCanvasRef.current?.getActiveObject() || null));
+        refreshAssets();
+        
+        setSelectedClipIds([]);
+        setActiveTab("adjust");
+        
+        const ids = selected.map((obj: any) => obj.id).filter(Boolean);
+        if (ids.length > 0) {
+           setSelectedAssetId(ids[0]);
+           setSelectedAssetIds(ids);
+           if (ids[0].startsWith("txt-")) setLeftPanel("text");
+           else if (ids[0].startsWith("stk-")) setLeftPanel("stickers");
+           else if (ids[0].startsWith("shp-")) setLeftPanel("shapes");
         }
-      });
+      };
+      
+      initCanvas.on("selection:created", handleSelection);
+      initCanvas.on("selection:updated", handleSelection);
       initCanvas.on("selection:cleared", () => { setSelectedObj(null); refreshAssets(); });
       
       const trackBaseState = (o: any) => {
@@ -1391,13 +1682,37 @@ export default function VideoEditorPage() {
       initCanvas.on("object:added", (e) => {
          trackBaseState(e.target);
          refreshAssets();
+         saveCanvasState();
       });
-      initCanvas.on("object:modified", (e) => trackBaseState(e.target));
+      initCanvas.on("object:modified", (e) => {
+         const o: any = e.target;
+         if (!o || o.id === 'video-proxy') return;
+         trackBaseState(o);
+         
+         if (o.keyframes && o.keyframes.length > 0) {
+             const localTime = Math.max(0, globalTimeRef.current - (o.startTime || 0));
+             const existingIdx = o.keyframes.findIndex((k: any) => Math.abs(k.time - localTime) < 0.1);
+             const patch = {
+                 x: o.left,
+                 y: o.top,
+                 videoZoom: o.scaleX,
+                 rotation: o.angle
+             };
+             if (existingIdx !== -1) {
+                 o.keyframes[existingIdx].properties = { ...o.keyframes[existingIdx].properties, ...patch };
+             } else {
+                 o.keyframes.push({ id: Math.random().toString(36).substring(7), time: localTime, properties: patch, easing: 'linear' });
+                 o.keyframes.sort((a: any, b: any) => a.time - b.time);
+             }
+         }
+         refreshAssets();
+         saveCanvasState();
+      });
       initCanvas.on("object:moving", (e) => trackBaseState(e.target));
       initCanvas.on("object:scaling", (e) => trackBaseState(e.target));
       initCanvas.on("object:rotating", (e) => trackBaseState(e.target));
-      initCanvas.on("object:removed", () => refreshAssets());
-      initCanvas.on("path:created",   () => refreshAssets());
+      initCanvas.on("object:removed", () => { refreshAssets(); saveCanvasState(); });
+      initCanvas.on("path:created",   () => { refreshAssets(); saveCanvasState(); });
       
       initCanvas.on("mouse:down", () => {
          (initCanvas as any).__isDragging = true;
@@ -1581,6 +1896,26 @@ export default function VideoEditorPage() {
            const pRate = merged.playbackRate || 1;
            merged.duration = (tEnd - tStart) / pRate;
         }
+
+        if (c.keyframes && c.keyframes.length > 0) {
+          const animProps: any = {};
+          (['x', 'y', 'videoZoom', 'opacity', 'rotation'] as const).forEach(p => {
+             if (updates[p] !== undefined) animProps[p] = updates[p];
+          });
+          if (Object.keys(animProps).length > 0) {
+            const localTime = Math.max(0, globalTimeRef.current - (c.startTime || 0));
+            const existingIdx = c.keyframes.findIndex(k => Math.abs(k.time - localTime) < 0.1);
+            if (existingIdx !== -1) {
+              const next = [...c.keyframes];
+              next[existingIdx] = { ...next[existingIdx], properties: { ...next[existingIdx].properties, ...animProps } };
+              merged.keyframes = next;
+            } else {
+              const newKf = { id: Math.random().toString(36).substring(7), time: localTime, properties: animProps, easing: 'linear' as const };
+              merged.keyframes = [...c.keyframes, newKf].sort((a,b) => a.time - b.time);
+            }
+          }
+        }
+
         return merged;
       }
       return c;
@@ -1619,7 +1954,12 @@ export default function VideoEditorPage() {
             const isActive = activeObj === o;
             
             if (gTime >= startTime && gTime <= endTime) {
-                if (!o.visible) {
+                if (o.userHidden) {
+                    if (o.visible) {
+                        o.set({ visible: false });
+                        needsRender = true;
+                    }
+                } else if (!o.visible) {
                     o.set({ visible: true });
                     needsRender = true;
                 }
@@ -1632,36 +1972,52 @@ export default function VideoEditorPage() {
 
                 const isDragging = (fabricCanvasRef.current as any)?.__isDragging;
                 const activeAnims = o.animations || (o.animationType && o.animationType !== 'none' ? [{ type: o.animationType, speed: o.animationSpeed || 1, intensity: o.animationIntensity || 1 }] : []);
+                const hasKeyframes = (o.keyframes && o.keyframes.length > 0);
 
-                if (activeAnims.length > 0 && (!isActive || !isDragging)) {
+                if ((activeAnims.length > 0 || hasKeyframes) && (!isActive || !isDragging)) {
                     const localTime = gTime - startTime;
                     const animTime = isActive ? nowSec : localTime;
                     
+                    const kfProps = interpolateKeyframes(o.keyframes, localTime, {
+                        x: o._baseLeft,
+                        y: o._baseTop,
+                        videoZoom: o._baseScaleX,
+                        opacity: o._baseOpacity ?? 1,
+                        rotation: o._baseAngle
+                    });
+
                     const animProps = computeAnimationOffsets(activeAnims, animTime, endTime - startTime);
                     
                     o.set({
-                        scaleX: (o._baseScaleX || 1) * animProps.scaleX,
-                        scaleY: (o._baseScaleY || 1) * animProps.scaleY,
-                        angle: (o._baseAngle || 0) + animProps.rotate,
-                        left: (o._baseLeft || 0) + animProps.x,
-                        top: (o._baseTop || 0) + animProps.y,
-                        opacity: (o._baseOpacity ?? 1) * animProps.alpha,
-                        visible: true
+                        scaleX: (kfProps.videoZoom ?? o._baseScaleX ?? 1) * animProps.scaleX,
+                        scaleY: (kfProps.videoZoom ?? o._baseScaleY ?? 1) * animProps.scaleY,
+                        angle: (kfProps.rotation ?? o._baseAngle ?? 0) + animProps.rotate,
+                        left: (kfProps.x ?? o._baseLeft ?? 0) + animProps.x,
+                        top: (kfProps.y ?? o._baseTop ?? 0) + animProps.y,
+                        opacity: (kfProps.opacity ?? o._baseOpacity ?? 1) * animProps.opacityMultiplier,
+                        visible: !o.userHidden
                     });
                     needsRender = true;
                 } else if (!isActive || isDragging) {
-                    if (o._baseScaleX !== undefined && (o.scaleX !== o._baseScaleX || o.angle !== o._baseAngle || o.left !== o._baseLeft || o.top !== o._baseTop || o.opacity !== o._baseOpacity)) {
+                    const kfProps = interpolateKeyframes(o.keyframes, gTime - startTime, {
+                        x: o._baseLeft,
+                        y: o._baseTop,
+                        videoZoom: o._baseScaleX,
+                        opacity: o._baseOpacity ?? 1,
+                        rotation: o._baseAngle
+                    });
+                    if (o._baseScaleX !== undefined && (o.scaleX !== (kfProps.videoZoom ?? o._baseScaleX) || o.angle !== (kfProps.rotation ?? o._baseAngle) || o.left !== (kfProps.x ?? o._baseLeft) || o.top !== (kfProps.y ?? o._baseTop) || o.opacity !== (kfProps.opacity ?? o._baseOpacity))) {
                         o.set({
-                            scaleX: o._baseScaleX,
-                            scaleY: o._baseScaleY,
-                            angle: o._baseAngle,
-                            left: o._baseLeft,
-                            top: o._baseTop,
-                            opacity: o._baseOpacity,
-                            visible: true
+                            scaleX: kfProps.videoZoom ?? o._baseScaleX,
+                            scaleY: kfProps.videoZoom ?? o._baseScaleY,
+                            angle: kfProps.rotation ?? o._baseAngle,
+                            left: kfProps.x ?? o._baseLeft,
+                            top: kfProps.y ?? o._baseTop,
+                            opacity: kfProps.opacity ?? o._baseOpacity,
+                            visible: !o.userHidden
                         });
                         needsRender = true;
-                    } else if (!o.visible) {
+                    } else if (!o.visible && !o.userHidden) {
                         o.set({ visible: true });
                         needsRender = true;
                     }
@@ -1759,7 +2115,7 @@ export default function VideoEditorPage() {
     const container = tracksAreaRef.current.parentElement;
     if (!container) return;
     
-    const trackWidth = tracksAreaRef.current.scrollWidth - 80; // W - 24 - 56
+    const trackWidth = tracksAreaRef.current.scrollWidth - 72; // W - 24 - 48
     const playheadPx = 68 + (globalTime / (totalDuration || 1)) * trackWidth;
     
     const scrollLeft = container.scrollLeft;
@@ -1797,7 +2153,7 @@ export default function VideoEditorPage() {
     const handleMouseMove = (e: MouseEvent) => {
       if (!tracksAreaRef.current) return;
       const rect = tracksAreaRef.current.getBoundingClientRect();
-      const paddingLeft = 68; // px-3 (12) + w-14 track header (56)
+      const paddingLeft = 60; // px-3 (12) + w-12 track header (48)
       const paddingRight = 12;
       const trackWidth = rect.width - paddingLeft - paddingRight;
       
@@ -2112,100 +2468,164 @@ export default function VideoEditorPage() {
   useEffect(() => {
     if (!fabricCanvasRef.current) return;
     
-    let existingProxy = fabricCanvasRef.current.getObjects().find(o => (o as any).id === 'video-proxy');
+    const canvasWidth = aspectRatio.w;
+    const canvasHeight = aspectRatio.h;
+
+    const currentObjects = fabricCanvasRef.current.getObjects();
+    const existingProxies = currentObjects.filter(o => (o as any).id?.startsWith('video-proxy-'));
     
     if (selectedClipIds.length === 0) {
-      if (existingProxy) {
-        fabricCanvasRef.current.remove(existingProxy);
-        fabricCanvasRef.current.renderAll();
-      }
+      existingProxies.forEach(p => fabricCanvasRef.current!.remove(p));
+      fabricCanvasRef.current.renderAll();
       return;
     }
 
-    const clip = clips.find(c => c.id === primarySelectedClipId);
-    if (!clip) return;
+    const validProxyIds = selectedClipIds.map(id => `video-proxy-${id}`);
+    existingProxies.forEach(p => {
+       if (!validProxyIds.includes((p as any).id)) {
+           fabricCanvasRef.current!.remove(p);
+       }
+    });
 
-    const canvasWidth = aspectRatio.w;
-    const canvasHeight = aspectRatio.h;
-    const expectedLeft = canvasWidth / 2 + (clip.x / 100) * canvasWidth;
-    const expectedTop = canvasHeight / 2 + (clip.y / 100) * canvasHeight;
-    const expectedScale = clip.videoZoom;
-    
-    if (!existingProxy) {
-      existingProxy = new fabric.Rect({
-        width: canvasWidth - 10,
-        height: canvasHeight - 10,
-        originX: 'center',
-        originY: 'center',
-        left: expectedLeft,
-        top: expectedTop,
-        scaleX: expectedScale,
-        scaleY: expectedScale,
-        fill: 'rgba(0,0,0,0.01)', // Almost invisible but allows clicking the interior
-        stroke: '#818cf8',
-        strokeWidth: 2,
-        strokeDashArray: [5, 5],
-        cornerColor: '#818cf8',
-        cornerStrokeColor: '#ffffff',
-        cornerSize: 10,
-        transparentCorners: false,
-        selectable: true,
-        hasControls: true,
-        hasBorders: true,
-        lockRotation: true,
-      });
-      (existingProxy as any).id = 'video-proxy';
-      fabricCanvasRef.current.add(existingProxy);
-      fabricCanvasRef.current.setActiveObject(existingProxy);
-      fabricCanvasRef.current.renderAll();
-    } else {
-       if (Math.abs(existingProxy.left! - expectedLeft) > 0.1 || 
-           Math.abs(existingProxy.top! - expectedTop) > 0.1 ||
-           Math.abs((existingProxy.scaleX || 1) - expectedScale) > 0.001) {
-           existingProxy.set({
-              left: expectedLeft,
-              top: expectedTop,
-              scaleX: expectedScale,
-              scaleY: expectedScale
-           });
-           existingProxy.setCoords();
-           fabricCanvasRef.current.renderAll();
+    const activeProxies: fabric.Object[] = [];
+    let needsRender = false;
+
+    selectedClipIds.forEach(clipId => {
+       const clip = clips.find(c => c.id === clipId);
+       if (!clip) return;
+
+       const expectedLeft = canvasWidth / 2 + (clip.x / 100) * canvasWidth;
+       const expectedTop = canvasHeight / 2 + (clip.y / 100) * canvasHeight;
+       const expectedScaleX = clip.videoZoom;
+       const expectedScaleY = clip.videoScaleY ?? clip.videoZoom;
+
+       let proxy = existingProxies.find(p => (p as any).id === `video-proxy-${clip.id}`);
+       if (!proxy) {
+         proxy = new fabric.Rect({
+           width: canvasWidth,
+           height: canvasHeight,
+           originX: 'center',
+           originY: 'center',
+           left: expectedLeft,
+           top: expectedTop,
+           scaleX: expectedScaleX,
+           scaleY: expectedScaleY,
+           fill: 'rgba(0,0,0,0.01)', // Almost invisible but allows clicking the interior
+           stroke: '#818cf8',
+           strokeWidth: 2,
+           strokeDashArray: [5, 5],
+           cornerColor: '#818cf8',
+           cornerStrokeColor: '#ffffff',
+           cornerSize: 10,
+           transparentCorners: false,
+           selectable: true,
+           hasControls: true,
+           hasBorders: true,
+           lockRotation: true,
+         });
+         (proxy as any).id = `video-proxy-${clip.id}`;
+         (proxy as any).clipId = clip.id;
+         fabricCanvasRef.current!.add(proxy);
+         needsRender = true;
+       } else {
+         if (Math.abs(proxy.left! - expectedLeft) > 0.1 || 
+             Math.abs(proxy.top! - expectedTop) > 0.1 ||
+             Math.abs((proxy.scaleX || 1) - expectedScaleX) > 0.001 ||
+             Math.abs((proxy.scaleY || 1) - expectedScaleY) > 0.001) {
+             proxy.set({
+                left: expectedLeft,
+                top: expectedTop,
+                scaleX: expectedScaleX,
+                scaleY: expectedScaleY
+             });
+             proxy.setCoords();
+             needsRender = true;
+         }
+       }
+       activeProxies.push(proxy!);
+    });
+
+    const currentActive = fabricCanvasRef.current.getActiveObject();
+    if (activeProxies.length === 1) {
+       if (currentActive !== activeProxies[0]) {
+           fabricCanvasRef.current.setActiveObject(activeProxies[0]);
+           needsRender = true;
+       }
+    } else if (activeProxies.length > 1) {
+       if (!currentActive || currentActive.type !== 'activeSelection' || (currentActive as fabric.ActiveSelection).getObjects().length !== activeProxies.length) {
+           const selection = new fabric.ActiveSelection(activeProxies, { canvas: fabricCanvasRef.current });
+           fabricCanvasRef.current.setActiveObject(selection);
+           needsRender = true;
        }
     }
 
+    if (needsRender) {
+       fabricCanvasRef.current.renderAll();
+    }
+
     const syncClipToProxy = (useHistoryState: boolean) => {
-      if (!existingProxy) return;
-      const x = ((existingProxy.left! - canvasWidth / 2) / canvasWidth) * 100;
-      const y = ((existingProxy.top! - canvasHeight / 2) / canvasHeight) * 100;
-      const zoom = existingProxy.scaleX || 1;
-      
-      const updateFn = (prev: VideoClip[]) => prev.map(c => 
-        c.id === primarySelectedClipId ? { ...c, x, y, videoZoom: zoom } : c
-      );
-      
-      if (useHistoryState) {
-        setClips(updateFn);
-      } else {
-        historyState.setWithoutHistory(updateFn);
+      const activeObj = fabricCanvasRef.current!.getActiveObject();
+      if (!activeObj) return;
+
+      const updates: {id: string, x: number, y: number, videoZoom: number, videoScaleY: number}[] = [];
+
+      if (activeObj.type === 'activeSelection') {
+          const group = activeObj as fabric.ActiveSelection;
+          group.getObjects().forEach(proxy => {
+             const matrix = proxy.calcTransformMatrix();
+             const options = fabric.util.qrDecompose(matrix);
+             
+             const x = ((options.translateX - canvasWidth / 2) / canvasWidth) * 100;
+             const y = ((options.translateY - canvasHeight / 2) / canvasHeight) * 100;
+             const zoomX = options.scaleX || 1;
+             const zoomY = options.scaleY || 1;
+             updates.push({ id: (proxy as any).clipId, x, y, videoZoom: zoomX, videoScaleY: zoomY });
+          });
+      } else if ((activeObj as any).id?.startsWith('video-proxy-')) {
+          const proxy = activeObj;
+          const x = ((proxy.left! - canvasWidth / 2) / canvasWidth) * 100;
+          const y = ((proxy.top! - canvasHeight / 2) / canvasHeight) * 100;
+          const zoomX = proxy.scaleX || 1;
+          const zoomY = proxy.scaleY || 1;
+          updates.push({ id: (proxy as any).clipId, x, y, videoZoom: zoomX, videoScaleY: zoomY });
+      }
+
+      if (updates.length > 0) {
+          const updateFn = (prev: VideoClip[]) => prev.map(c => {
+             const u = updates.find(update => update.id === c.id);
+             return u ? { ...c, x: u.x, y: u.y, videoZoom: u.videoZoom, videoScaleY: u.videoScaleY } : c;
+          });
+          
+          if (useHistoryState) {
+            setClips(updateFn);
+          } else {
+            historyState.setWithoutHistory(updateFn);
+          }
       }
     };
 
-    existingProxy.off('moving');
-    existingProxy.off('scaling');
-    existingProxy.off('modified');
-
-    existingProxy.on('moving', () => syncClipToProxy(false));
-    existingProxy.on('scaling', () => {
-      if (existingProxy!.scaleX !== existingProxy!.scaleY) {
-         existingProxy!.set({ scaleY: existingProxy!.scaleX });
-      }
-      syncClipToProxy(false);
+    activeProxies.forEach(proxy => {
+      proxy.off('moving');
+      proxy.off('scaling');
+      proxy.off('modified');
     });
-    existingProxy.on('modified', () => syncClipToProxy(true));
+
+    const currentActiveObj = fabricCanvasRef.current.getActiveObject();
+    if (currentActiveObj) {
+      currentActiveObj.off('moving');
+      currentActiveObj.off('scaling');
+      currentActiveObj.off('modified');
+
+      currentActiveObj.on('moving', () => syncClipToProxy(false));
+      currentActiveObj.on('scaling', () => {
+        syncClipToProxy(false);
+      });
+      currentActiveObj.on('modified', () => syncClipToProxy(true));
+    }
 
     const handleSelectionCleared = (e: any) => {
       if (!e.deselected) return;
-      const deselectedProxy = e.deselected.find((o: any) => o.id === 'video-proxy');
+      const deselectedProxy = e.deselected.some((o: any) => o.id?.startsWith('video-proxy-'));
       if (deselectedProxy) {
         setSelectedClipIds([]);
       }
@@ -2214,6 +2634,43 @@ export default function VideoEditorPage() {
     fabricCanvasRef.current.off('selection:cleared');
     fabricCanvasRef.current.on('selection:cleared', handleSelectionCleared);
   }, [selectedClipIds, clips, aspectRatio, setClips, historyState]);
+
+  // Fabric.js Asset Multi-Selection Sync
+  useEffect(() => {
+    if (!fabricCanvasRef.current) return;
+    
+    if (selectedAssetIds.length === 0) {
+      // Don't clear selection if the current selection is a video-proxy
+      const active = fabricCanvasRef.current.getActiveObject();
+      if (active && !(active as any).id?.startsWith('video-proxy-')) {
+          fabricCanvasRef.current.discardActiveObject();
+          fabricCanvasRef.current.renderAll();
+      }
+      return;
+    }
+
+    const objectsToSelect = canvasAssets
+       .filter(a => selectedAssetIds.includes(a.id))
+       .map(a => a.obj)
+       .filter(Boolean) as fabric.Object[];
+
+    if (objectsToSelect.length === 0) return;
+
+    const currentActive = fabricCanvasRef.current.getActiveObject();
+    
+    if (objectsToSelect.length === 1) {
+       if (currentActive !== objectsToSelect[0]) {
+           fabricCanvasRef.current.setActiveObject(objectsToSelect[0]);
+           fabricCanvasRef.current.renderAll();
+       }
+    } else {
+       if (!currentActive || currentActive.type !== 'activeSelection' || (currentActive as fabric.ActiveSelection).getObjects().length !== objectsToSelect.length) {
+           const selection = new fabric.ActiveSelection(objectsToSelect, { canvas: fabricCanvasRef.current });
+           fabricCanvasRef.current.setActiveObject(selection);
+           fabricCanvasRef.current.renderAll();
+       }
+    }
+  }, [selectedAssetIds, canvasAssets]);
 
   // Direct Player Selection via Hit Testing and Text Tool Mode
   useEffect(() => {
@@ -2255,6 +2712,7 @@ export default function VideoEditorPage() {
              }
           }
           setSelectedAssetId(null);
+          setSelectedAssetIds([]);
           return;
         }
       }
@@ -2399,6 +2857,7 @@ export default function VideoEditorPage() {
 
       // Add to canvas
       fabric.Image.fromURL(fileUrl, (img) => {
+        if (!img) return;
         const maxW = 200;
         if (img.width && img.width > maxW) {
            img.scaleToWidth(maxW);
@@ -2450,6 +2909,7 @@ export default function VideoEditorPage() {
   const handleAddDefaultLogo = (url: string) => {
     if (!fabricCanvasRef.current) return;
     fabric.Image.fromURL(url, (img) => {
+      if (!img) return;
       img.scale(0.2);
       img.set({ 
         left: fabricCanvasRef.current!.width! / 2, 
@@ -2465,6 +2925,39 @@ export default function VideoEditorPage() {
       fabricCanvasRef.current?.renderAll();
     }, { crossOrigin: 'anonymous' });
   };
+  const handleFitToCanvas = (mode: 'contain' | 'cover') => {
+    if (!selectedObj || !fabricCanvasRef.current) return;
+    const canvasW = aspectRatio.w;
+    const canvasH = aspectRatio.h;
+    
+    const objW = selectedObj.width || 1;
+    const objH = selectedObj.height || 1;
+    
+    const scaleX = canvasW / objW;
+    const scaleY = canvasH / objH;
+    const scale = mode === 'contain' ? Math.min(scaleX, scaleY) : Math.max(scaleX, scaleY);
+    
+    selectedObj.set({
+      scaleX: scale,
+      scaleY: scale,
+      left: canvasW / 2,
+      top: canvasH / 2,
+      originX: 'center',
+      originY: 'center'
+    });
+    
+    if ((selectedObj as any)._baseScaleX !== undefined) {
+      (selectedObj as any)._baseScaleX = scale;
+      (selectedObj as any)._baseScaleY = scale;
+      (selectedObj as any)._baseLeft = canvasW / 2;
+      (selectedObj as any)._baseTop = canvasH / 2;
+    }
+    
+    selectedObj.setCoords();
+    fabricCanvasRef.current.renderAll();
+    setCanvasAssets(prev => [...prev]);
+  };
+
   const handleReplaceImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !fabricCanvasRef.current || !selectedObj || selectedObj.type !== 'image') return;
@@ -2534,6 +3027,7 @@ export default function VideoEditorPage() {
         const croppedImageBase64 = await getCroppedImg(imgRef.current, completedCrop);
         if (cropTargetObj && fabricCanvasRef.current) {
           fabric.Image.fromURL(croppedImageBase64, (img) => {
+            if (!img) return;
             // copy properties
             img.set({
               left: cropTargetObj.left,
@@ -2750,7 +3244,6 @@ export default function VideoEditorPage() {
     showToast("Extracting audio and generating auto-captions...", "info");
     
     try {
-      const token = localStorage.getItem("token");
       
       for (let i = 0; i < clips.length; i++) {
         const clip = clips[i];
@@ -2875,8 +3368,6 @@ export default function VideoEditorPage() {
     showToast("Removing background...", "info");
 
     try {
-      const token = localStorage.getItem("token");
-      
       const dataUrl = (asset.obj as fabric.Image).toDataURL({ format: 'png' });
       const resBlob = await fetch(dataUrl).then(r => r.blob());
       
@@ -2889,12 +3380,16 @@ export default function VideoEditorPage() {
         body: formData
       });
 
-      if (!res.ok) throw new Error("Failed to remove background");
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Failed to remove background: ${res.status} ${errText}`);
+      }
 
       const blob = await res.blob();
       const newUrl = URL.createObjectURL(blob);
       
       fabric.Image.fromURL(newUrl, (img) => {
+        if (!img) return;
         const oldImg = asset.obj as fabric.Image;
         img.set({
           left: oldImg.left,
@@ -3145,6 +3640,7 @@ export default function VideoEditorPage() {
       originalVideoUrl,
       audioClips,
       canvasJson,
+      aspectRatio,
     };
     const updated = [draft, ...drafts];
     setDrafts(updated);
@@ -3159,12 +3655,14 @@ export default function VideoEditorPage() {
     if (draft.videoUrl !== undefined) setVideoUrl(draft.videoUrl);
     if (draft.originalVideoUrl !== undefined) setOriginalVideoUrl(draft.originalVideoUrl);
     if (draft.audioClips !== undefined) setAudioClips(draft.audioClips);
+    if (draft.aspectRatio !== undefined) setAspectRatio(draft.aspectRatio);
     if (draft.canvasJson && fabricCanvasRef.current) {
       try {
         fabricCanvasRef.current.loadFromJSON(draft.canvasJson, () => {
           fabricCanvasRef.current?.renderAll();
           refreshAssets();
         }, (o: any, obj: any) => {
+          if (!obj) return;
           if (o.id) obj.id = o.id;
           if (o.startTime !== undefined) obj.startTime = o.startTime;
           if (o.endTime !== undefined) obj.endTime = o.endTime;
@@ -3248,8 +3746,7 @@ export default function VideoEditorPage() {
     if (!ctx) return null;
 
     ctx.scale(scaleFactorX, scaleFactorY);
-    ctx.fillStyle = "white";
-    ctx.fillRect(0, 0, w, h);
+    ctx.clearRect(0, 0, w, h);
 
     const currentActiveClips = [...activeClips].sort((a, b) => {
       const aIdx = videoTracks.findIndex(t => t.id === a.trackId);
@@ -3257,8 +3754,17 @@ export default function VideoEditorPage() {
       return aIdx - bIdx;
     });
 
-    const drawClip = (clip: VideoClip) => {
-      const localTime = globalTime - clip.startTime;
+    const drawClip = (originalClip: VideoClip) => {
+      const localTime = globalTime - originalClip.startTime;
+      const kfProps = interpolateKeyframes(originalClip.keyframes, localTime, {
+         x: originalClip.x,
+         y: originalClip.y,
+         videoZoom: originalClip.videoZoom,
+         opacity: originalClip.opacity ?? 1,
+         rotation: originalClip.rotation
+      });
+      const clip = { ...originalClip, ...kfProps };
+
       let baseOpacity = clip.opacity !== undefined ? clip.opacity : 1;
       let previewOpacity = baseOpacity;
       if (clip.fadeInDuration && localTime < clip.fadeInDuration) {
@@ -3452,7 +3958,7 @@ export default function VideoEditorPage() {
     if (fabricCanvasRef.current) {
        fabricCanvasRef.current.discardActiveObject();
        fabricCanvasRef.current.renderAll();
-       const dataUrl = fabricCanvasRef.current.toDataURL({ format: 'png', multiplier: Math.max(scaleFactorX, scaleFactorY) });
+       const dataUrl = fabricCanvasRef.current.toDataURL({ format: 'png' });
        const img = new Image();
        img.src = dataUrl;
        await new Promise(r => img.onload = r);
@@ -3536,7 +4042,7 @@ export default function VideoEditorPage() {
       // Use 60fps only for high quality. 30fps perfectly halves the CPU filter_complex workload.
       const exportFps = exportQuality === "high" ? 60 : 30; 
 
-      const assetOverlays: { name: string; start: number; end: number, animType: string, animSpeed: number, animIntensity: number, cx: number, cy: number, blob: Blob }[] = [];
+      const assetOverlays: any[] = [];
       const tickerAssets: { name: string; blob: Blob }[] = [];
       if (fabricCanvasRef.current && canvasAssets.length > 0) {
         fabricCanvasRef.current.discardActiveObject();
@@ -3563,13 +4069,19 @@ export default function VideoEditorPage() {
           const currentLeft = o.left;
           const currentTop = o.top;
 
-          if (o._baseScaleX !== undefined) {
+          const baseLeft = o._baseLeft !== undefined ? o._baseLeft : o.left;
+          const baseTop = o._baseTop !== undefined ? o._baseTop : o.top;
+          const baseScaleX = (o._baseScaleX !== undefined && !isNaN(o._baseScaleX)) ? o._baseScaleX : o.scaleX;
+          const baseScaleY = (o._baseScaleY !== undefined && !isNaN(o._baseScaleY)) ? o._baseScaleY : o.scaleY;
+          const baseAngle = o._baseAngle !== undefined ? o._baseAngle : o.angle;
+
+          if (o._baseScaleX !== undefined || (o.keyframes && o.keyframes.length > 0)) {
              o.set({ 
-                scaleX: o._baseScaleX, 
-                scaleY: o._baseScaleY, 
-                angle: o._baseAngle !== undefined ? o._baseAngle : 0, 
-                left: o._baseLeft !== undefined ? o._baseLeft : o.left,
-                top: o._baseTop !== undefined ? o._baseTop : o.top,
+                scaleX: baseScaleX, 
+                scaleY: baseScaleY, 
+                angle: 0, 
+                left: baseLeft,
+                top: baseTop,
                 opacity: 1 
              });
              o.setCoords();
@@ -3584,12 +4096,10 @@ export default function VideoEditorPage() {
 
           // Safe fallback to prevent NaN from crashing FFmpeg render
           if (isNaN(cx)) {
-            const rawLeft = o._baseLeft !== undefined ? o._baseLeft : o.left;
-            cx = (typeof rawLeft === 'number' && !isNaN(rawLeft) ? rawLeft : (aspectRatio.w / 2)) * ffScaleX;
+            cx = (typeof baseLeft === 'number' && !isNaN(baseLeft) ? baseLeft : (aspectRatio.w / 2)) * ffScaleX;
           }
           if (isNaN(cy)) {
-            const rawTop = o._baseTop !== undefined ? o._baseTop : o.top;
-            cy = (typeof rawTop === 'number' && !isNaN(rawTop) ? rawTop : (aspectRatio.h / 2)) * ffScaleY;
+            cy = (typeof baseTop === 'number' && !isNaN(baseTop) ? baseTop : (aspectRatio.h / 2)) * ffScaleY;
           }
           
           let dataUrl = "";
@@ -3617,7 +4127,16 @@ export default function VideoEditorPage() {
              animIntensity: o.animationIntensity || 1.0,
              cx,
              cy,
-             blob
+             blob,
+             keyframes: o.keyframes || [],
+             animations: o.animations || [],
+             baseLeft,
+             baseTop,
+             baseScaleX,
+             baseScaleY,
+             baseAngle,
+             ffScaleX,
+             ffScaleY
           });
           
           o.set({ 
@@ -3657,6 +4176,39 @@ export default function VideoEditorPage() {
         return { hex: `0x${clean}`, alpha: '1.0' };
       };
 
+      // Helper: Build FFmpeg mathematical expression from keyframes for a given property
+      const buildKfExpr = (keyframes: KeyframeDef[] | undefined, prop: keyof KeyframeDef['properties'], baseVal: number, tVar: string = 't') => {
+        if (!keyframes || keyframes.length === 0) return baseVal.toString();
+        const kfs = [...keyframes].filter(k => k.properties[prop] !== undefined).sort((a,b) => a.time - b.time);
+        if (kfs.length === 0) return baseVal.toString();
+        if (kfs.length === 1) return kfs[0].properties[prop]!.toString();
+
+        let expr = `if(lt(${tVar},${kfs[0].time}),${kfs[0].properties[prop]},REPLACE_ME)`;
+        for (let i = 0; i < kfs.length - 1; i++) {
+          const k1 = kfs[i];
+          const k2 = kfs[i+1];
+          const v1 = k1.properties[prop]!;
+          const v2 = k2.properties[prop]!;
+          const t1 = k1.time;
+          const t2 = k2.time;
+          const dur = t2 - t1;
+          
+          let p = `((${tVar}-${t1})/${dur})`;
+          
+          if (k1.easing === 'ease-in') {
+            p = `pow(${p},3)`;
+          } else if (k1.easing === 'ease-out') {
+            p = `(1-pow(1-${p},3))`;
+          } else if (k1.easing === 'ease-in-out') {
+            p = `if(lt(${p},0.5),4*pow(${p},3),1-pow(-2*${p}+2,3)/2)`;
+          }
+          
+          const lerp = `${v1}+(${v2}-${v1})*${p}`;
+          expr = expr.replace('REPLACE_ME', `if(lt(${tVar},${t2}),${lerp},REPLACE_ME)`);
+        }
+        return expr.replace('REPLACE_ME', kfs[kfs.length - 1].properties[prop]!.toString());
+      };
+
       // Create base black canvas at constant CFR to avoid frame-drop/duplicate jitter on output
       const sizeStr = `${exportW}x${exportH}`;
       let finalFilter = `color=c=black:s=${sizeStr}:d=${totalDuration}:r=${exportFps}[base]`;
@@ -3684,7 +4236,10 @@ export default function VideoEditorPage() {
         
         // Build per-clip filters: perfectly match CSS object-contain + transform scale
         const fitScale = `scale=${exportW}:${exportH}:force_original_aspect_ratio=decrease`;
-        const zoomScale = c.videoZoom !== 1.0 ? `,scale=trunc(iw*${c.videoZoom}):trunc(ih*${c.videoZoom})` : "";
+        
+        const zoomExprX = buildKfExpr(c.keyframes, 'videoZoom', c.videoZoom ?? 1.0, `(t-${c.startTime})`);
+        const zoomExprY = buildKfExpr(c.keyframes, 'videoScaleY', c.videoScaleY ?? c.videoZoom ?? 1.0, `(t-${c.startTime})`);
+        const zoomScale = (zoomExprX !== '1' && zoomExprX !== '1.0' || zoomExprY !== '1' && zoomExprY !== '1.0' || c.videoZoom !== 1.0 || (c.videoScaleY !== undefined && c.videoScaleY !== 1.0)) ? `,scale=w='iw*(${zoomExprX})':h='ih*(${zoomExprY})':eval=frame` : "";
         
         const chromaFilter = c.enableChromaKey ? `,colorkey=${c.chromaKeyColor}:${c.chromaKeySimilarity}:0.0` : "";
         const colorFilter = `eq=brightness=${c.brightness}:contrast=${c.contrast}:saturation=${c.saturate}`;
@@ -3697,19 +4252,102 @@ export default function VideoEditorPage() {
            fadeFilters += `,fade=t=out:st=${c.startTime + c.duration - c.fadeOutDuration}:d=${c.fadeOutDuration}:alpha=1`;
         }
 
-        const scaleFilter = fitScale + zoomScale + chromaFilter;
+        const rotExpr = buildKfExpr(c.keyframes, 'rotation', c.rotation ?? 0, `(t-${c.startTime})`);
+        const rotFilter = (rotExpr !== '0' && rotExpr !== '0.0' || c.rotation !== 0) ? `,rotate=a='(${rotExpr})*PI/180':ow='hypot(iw,ih)':oh='hypot(iw,ih)':c=none` : "";
+
+        let cinematicFilter = "";
+        if (c.cinematicEffect === "film-grain") {
+           cinematicFilter += `,noise=alls=15:allf=t+u`;
+        } else if (c.cinematicEffect === "letterbox") {
+           cinematicFilter += `,crop=iw:ih*0.75:0:(ih-ih*0.75)/2,pad=iw:ih:0:(ih-ih*0.75)/2`;
+        } else if (c.cinematicEffect === "vignette") {
+           cinematicFilter += `,vignette=PI/4`;
+        } else if (c.cinematicEffect === "rgb-split") {
+           cinematicFilter += `,geq=r='r(X+6,Y)':g='g(X,Y)':b='b(X-6,Y)'`;
+        }
+
+        const scaleFilter = fitScale + zoomScale + rotFilter + chromaFilter + cinematicFilter;
         
         const pRate = c.playbackRate || 1;
         const setptsFilter = pRate !== 1 ? `setpts=(PTS-STARTPTS)/${pRate}+${c.startTime}/TB` : `setpts=PTS-STARTPTS+${c.startTime}/TB`;
 
+        const opExpr = buildKfExpr(c.keyframes, 'opacity', c.opacity ?? 1, `(t-${c.startTime})`);
         let opacityFilter = "";
-        if (c.opacity !== undefined && c.opacity < 1) {
-          opacityFilter = `,format=rgba,colorchannelmixer=aa=${c.opacity}`;
+        if (opExpr !== '1' || (c.opacity !== undefined && c.opacity < 1)) {
+          opacityFilter = `,format=rgba,colorchannelmixer=aa='${opExpr}'`;
         }
 
         // Handle Picture-in-Picture positioning (X,Y offsets based on width/height percentages)
-        let overlayX = `(W-w)/2 + W*(${c.x}/100)`;
-        let overlayY = `(H-h)/2 + H*(${c.y}/100)`;
+        const xExpr = buildKfExpr(c.keyframes, 'x', c.x ?? 0, `(t-${c.startTime})`);
+        const yExpr = buildKfExpr(c.keyframes, 'y', c.y ?? 0, `(t-${c.startTime})`);
+        let overlayX = `(W-w)/2 + W*(${xExpr}/100)`;
+        let overlayY = `(H-h)/2 + H*(${yExpr}/100)`;
+        
+        const T_clip = `(t-${c.startTime})`;
+        const activeAnimsClip = c.animations?.length ? c.animations : 
+           (c.animationType && c.animationType !== "none" ? [{ type: c.animationType, speed: c.animationSpeed, intensity: c.animationIntensity } as AnimationDef] : []);
+           
+        let animFilter = "";
+        activeAnimsClip.forEach(anim => {
+           const speed = anim.speed || 1.0;
+           const intensity = anim.intensity || 1.0;
+           switch(anim.type) {
+              case "pulse":
+                 animFilter += `,scale=w='iw*(1+sin(${T_clip}*PI*2*${speed})*0.1*${intensity})':h='ih*(1+sin(${T_clip}*PI*2*${speed})*0.1*${intensity})':eval=frame`;
+                 break;
+              case "wiggle":
+                 animFilter += `,rotate=a='sin(${T_clip}*PI*2*${speed})*PI/12*${intensity}':ow='hypot(iw,ih)':oh='hypot(iw,ih)':c=none`;
+                 break;
+              case "spin-cw":
+              case "spin":
+                 animFilter += `,rotate=a='${T_clip}*2*PI*${speed}':ow='hypot(iw,ih)':oh='hypot(iw,ih)':c=none`;
+                 break;
+              case "spin-ccw":
+                 animFilter += `,rotate=a='-${T_clip}*2*PI*${speed}':ow='hypot(iw,ih)':oh='hypot(iw,ih)':c=none`;
+                 break;
+              case "blink":
+                 animFilter += `,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*if(eq(mod(floor((T-${c.startTime})*4*${speed}),2),0),max(0,1-0.5*${intensity}),1)'`;
+                 break;
+              case "slide-in-left":
+                 overlayX += ` + w * min(0, -1 + ${T_clip}*${speed})`;
+                 break;
+              case "slide-in-right":
+                 overlayX += ` + w * max(0, 1 - ${T_clip}*${speed})`;
+                 break;
+              case "slide-in-top":
+                 overlayY += ` + h * min(0, -1 + ${T_clip}*${speed})`;
+                 break;
+              case "slide-in-bottom":
+                 overlayY += ` + h * max(0, 1 - ${T_clip}*${speed})`;
+                 break;
+              case "zoom-in":
+                 animFilter += `,scale=w='iw*(1+(${T_clip}*${speed}*0.1*${intensity}))':h='ih*(1+(${T_clip}*${speed}*0.1*${intensity}))':eval=frame`;
+                 break;
+              case "zoom-out":
+                 animFilter += `,scale=w='iw*max(0,1.2-(${T_clip}*${speed}*0.1*${intensity}))':h='ih*max(0,1.2-(${T_clip}*${speed}*0.1*${intensity}))':eval=frame`;
+                 break;
+              case "shake":
+                 overlayX += ` + (sin(${T_clip}*20*${speed}) + sin(${T_clip}*35*${speed}))*5*${intensity}`;
+                 overlayY += ` + (cos(${T_clip}*25*${speed}) + sin(${T_clip}*40*${speed}))*5*${intensity}`;
+                 break;
+              case "pro-whip-pan":
+                 overlayX += ` - 100 * exp(-${T_clip}*${speed}*12)*${intensity}`;
+                 break;
+              case "pro-slider-left":
+                 overlayX += ` - (${T_clip}*${speed}*2*${intensity})`;
+                 break;
+              case "pro-slider-right":
+                 overlayX += ` + (${T_clip}*${speed}*2*${intensity})`;
+                 break;
+              case "pro-pan-up":
+                 overlayY += ` - (${T_clip}*${speed}*1.5*${intensity})`;
+                 break;
+              case "pro-pan-down":
+                 overlayY += ` + (${T_clip}*${speed}*1.5*${intensity})`;
+                 break;
+           }
+        });
+
         let transitionFilter = "";
 
         if (c.transitionType && c.transitionType !== "none" && c.transitionDuration) {
@@ -3747,11 +4385,23 @@ export default function VideoEditorPage() {
                  // Scale from 1.5 down to 1.0
                  transitionFilter = `,format=rgba,scale=w='iw*(1+0.5*(1-(t-${tStart})/${tDur}))':h='ih*(1+0.5*(1-(t-${tStart})/${tDur}))',colorchannelmixer=aa='if(lt(t,${tEnd}), (t-${tStart})/${tDur}, 1)'`;
                  break;
+              case "cross-zoom":
+                 transitionFilter = `,format=rgba,scale=w='iw*(0.5+0.5*((t-${tStart})/${tDur}))':h='ih*(0.5+0.5*((t-${tStart})/${tDur}))',colorchannelmixer=aa='if(lt(t,${tEnd}), (t-${tStart})/${tDur}, 1)'`;
+                 break;
+              case "film-burn":
+                 transitionFilter = `,format=rgba,colorchannelmixer=rr=1.5:rg=0.5:rb=0:gr=0:gg=1:gb=0:br=0:bg=0:bb=0.5,eq=brightness='if(lt(t,${tEnd}), 1-abs(0.5-((t-${tStart})/${tDur}))*2, 0)',colorchannelmixer=aa='if(lt(t,${tEnd}), (t-${tStart})/${tDur}, 1)'`;
+                 break;
+              case "glitch":
+                 transitionFilter = `,format=rgba,geq=r='r(X+15*sin((t-${tStart})*50),Y)':g='g(X,Y)':b='b(X-15*sin((t-${tStart})*50),Y)',colorchannelmixer=aa='if(lt(t,${tEnd}), (t-${tStart})/${tDur}, 1)'`;
+                 break;
+              case "whip-pan":
+                 overlayX = `if(lt(t,${tEnd}), (W-w)/2 + W*(${c.x ?? 0}/100) + W*pow((1-(t-${tStart})/${tDur}), 3), (W-w)/2 + W*(${c.x ?? 0}/100))`;
+                 break;
            }
         }
 
         // Force input clip to CFR to sync perfectly with canvas and avoid jitter
-        const clipFilter = `[${inputIdx}:v]fps=fps=${exportFps},trim=start=${tStart}:end=${tEnd},${setptsFilter},${scaleFilter},${colorFilter}${fadeFilters}${opacityFilter}${transitionFilter}[v${i}]`;
+        const clipFilter = `[${inputIdx}:v]fps=fps=${exportFps},trim=start=${tStart}:end=${tEnd},${setptsFilter},${scaleFilter},${colorFilter}${fadeFilters}${opacityFilter}${transitionFilter}${animFilter}[v${i}]`;
 
         finalFilter += `;${clipFilter};${lastOut}[v${i}]overlay=${overlayX}:${overlayY}:enable='between(t,${c.startTime},${c.startTime + c.duration})'${nextOut}`;
         lastOut = nextOut;
@@ -3763,8 +4413,27 @@ export default function VideoEditorPage() {
           const inputIdx = validVideoClips.length + i;
           
           let assetFilter = `[${inputIdx}:v]format=rgba,setpts=PTS-STARTPTS`;
-          let ox = `${a.cx} - w/2`;
-          let oy = `${a.cy} - h/2`;
+          
+          const opExpr = buildKfExpr(a.keyframes, 'opacity', 1, `(t-${a.start})`);
+          if (opExpr !== '1') {
+            assetFilter += `,colorchannelmixer=aa='${opExpr}'`;
+          }
+
+          const zoomExpr = buildKfExpr(a.keyframes, 'videoZoom', a.baseScaleX, `(t-${a.start})`);
+          if (zoomExpr !== a.baseScaleX.toString() && zoomExpr !== '1') {
+            assetFilter += `,scale=w='iw*(${zoomExpr}/${a.baseScaleX})':h='ih*(${zoomExpr}/${a.baseScaleX})':eval=frame`;
+          }
+          
+          const rotExpr = buildKfExpr(a.keyframes, 'rotation', a.baseAngle, `(t-${a.start})`);
+          if (rotExpr !== a.baseAngle.toString() && rotExpr !== '0') {
+            assetFilter += `,rotate=a='(${rotExpr})*PI/180':ow='hypot(iw,ih)':oh='hypot(iw,ih)':c=none`;
+          }
+
+          const xExpr = buildKfExpr(a.keyframes, 'x', a.baseLeft, `(t-${a.start})`);
+          const yExpr = buildKfExpr(a.keyframes, 'y', a.baseTop, `(t-${a.start})`);
+
+          let ox = `${a.cx} + (${xExpr} - ${a.baseLeft})*${a.ffScaleX} - w/2`;
+          let oy = `${a.cy} + (${yExpr} - ${a.baseTop})*${a.ffScaleY} - h/2`;
           const T = `(t-${a.start})`;
           
           const activeAnims = a.animations?.length ? a.animations : 
@@ -4811,11 +5480,11 @@ export default function VideoEditorPage() {
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div>
                       <label className="text-[10px] uppercase text-zinc-500 font-bold">Width ({customUnit})</label>
-                      <input type="number" step="any" value={customW} onChange={e => setCustomW(+e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-white text-sm outline-none focus:ring-1 focus:ring-indigo-500" />
+                      <input type="number" step="any" value={Number.isNaN(customW) ? "" : customW} onChange={e => setCustomW(+e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-white text-sm outline-none focus:ring-1 focus:ring-indigo-500" />
                     </div>
                     <div>
                       <label className="text-[10px] uppercase text-zinc-500 font-bold">Height ({customUnit})</label>
-                      <input type="number" step="any" value={customH} onChange={e => setCustomH(+e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-white text-sm outline-none focus:ring-1 focus:ring-indigo-500" />
+                      <input type="number" step="any" value={Number.isNaN(customH) ? "" : customH} onChange={e => setCustomH(+e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-white text-sm outline-none focus:ring-1 focus:ring-indigo-500" />
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -4948,7 +5617,7 @@ export default function VideoEditorPage() {
       </header>
 
       {/* MAIN WORKSPACE */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex flex-1 min-h-[250px] overflow-hidden">
         
         {/* LEFT SIDEBAR - TOOLS */}
         <div className="w-14 sm:w-16 bg-zinc-900 border-r border-zinc-800 flex flex-col items-center py-2 gap-1 overflow-y-auto shrink-0 z-10 custom-scrollbar">
@@ -5370,7 +6039,7 @@ export default function VideoEditorPage() {
                   <div className="space-y-1">
                     <label className="text-[10px] text-zinc-400">Size</label>
                     <div className="flex items-center gap-2">
-                      <input type="range" min={12} max={120} step={2} value={textSize} onChange={e => { setTextSize(+e.target.value); (selectedObj as any)?.set?.({ fontSize: +e.target.value }); fabricCanvasRef.current?.renderAll(); }} className="flex-1 accent-indigo-500 h-1" />
+                      <input type="range" min={12} max={120} step={2} value={Number.isNaN(textSize) ? 12 : textSize} onChange={e => { setTextSize(+e.target.value); (selectedObj as any)?.set?.({ fontSize: +e.target.value }); fabricCanvasRef.current?.renderAll(); }} className="flex-1 accent-indigo-500 h-1" />
                       <span className="text-[10px] text-zinc-500 w-6">{textSize}px</span>
                     </div>
                   </div>
@@ -5577,6 +6246,7 @@ export default function VideoEditorPage() {
                           const scaleMin = Math.min(scaleX, scaleY);
                           
                           fabric.Image.fromURL(`data:image/svg+xml;utf8,${encodeURIComponent(template.bgSvg)}`, (img) => {
+                            if (!img) return;
                             img.set({ 
                               scaleX: scaleX,
                               scaleY: scaleY,
@@ -5610,6 +6280,7 @@ export default function VideoEditorPage() {
                             if ((template as any).images) {
                               (template as any).images.forEach((imgCfg: any, i: number) => {
                                 fabric.Image.fromURL(imgCfg.url, (placeholderImg) => {
+                                  if (!placeholderImg) return;
                                   placeholderImg.set({
                                     left: canvasObj.width! / 2 + (imgCfg.left - 540) * scaleX,
                                     top: canvasObj.height! / 2 + (imgCfg.top - 960) * scaleY,
@@ -5703,7 +6374,7 @@ export default function VideoEditorPage() {
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">Size: {brushSize}px</label>
-                  <input type="range" min="1" max="50" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-full accent-indigo-500" />
+                  <input type="range" min="1" max="50" value={Number.isNaN(brushSize) ? 1 : brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-full accent-indigo-500" />
                 </div>
               </div>
             )}
@@ -5826,7 +6497,7 @@ export default function VideoEditorPage() {
                               min="0" 
                               max="1" 
                               step="0.05" 
-                              value={activeFabricObj.opacity ?? 1} 
+                              value={Number.isNaN(activeFabricObj.opacity) ? 1 : (activeFabricObj.opacity ?? 1)} 
                               onChange={e => { 
                                 activeFabricObj.set('opacity', parseFloat(e.target.value)); 
                                 fabricCanvasRef.current?.renderAll(); 
@@ -5952,18 +6623,63 @@ export default function VideoEditorPage() {
                       const aIdx = videoTracks.findIndex(t => t.id === a.trackId);
                       const bIdx = videoTracks.findIndex(t => t.id === b.trackId);
                       return aIdx - bIdx;
-                    }).map((clip, i) => {
+                    }).map((c, i) => {
+                    const originalClip = c;
+                    const localTime = globalTime - originalClip.startTime;
+                    const kfProps = interpolateKeyframes(originalClip.keyframes, localTime, {
+                       x: originalClip.x,
+                       y: originalClip.y,
+                       videoZoom: originalClip.videoZoom,
+                       opacity: originalClip.opacity ?? 1,
+                       rotation: originalClip.rotation
+                    });
+                    const clip = { ...originalClip, ...kfProps };
+
                     let baseOpacity = clip.opacity !== undefined ? clip.opacity : 1;
                     let previewOpacity = baseOpacity;
-                    const localTime = globalTime - clip.startTime;
                     if (clip.fadeInDuration && localTime < clip.fadeInDuration) {
                        previewOpacity = baseOpacity * (localTime / clip.fadeInDuration);
                     } else if (clip.fadeOutDuration && localTime > clip.duration - clip.fadeOutDuration) {
                        previewOpacity = baseOpacity * ((clip.duration - localTime) / clip.fadeOutDuration);
                     }
 
-                    const hasFilter = clip.brightness !== 0 || clip.contrast !== 1 || clip.saturate !== 1 || clip.sepia !== 0 || clip.hueRotate !== 0;
-                    const filterStr = hasFilter ? `brightness(${1 + clip.brightness}) contrast(${clip.contrast}) saturate(${clip.saturate}) sepia(${clip.sepia}) hue-rotate(${clip.hueRotate}deg)` : undefined;
+                    let transitionScale = 1;
+                    let transitionTranslateX = 0;
+                    let transitionBrightness = 0;
+                    
+                    if (clip.transitionType && clip.transitionType !== "none" && clip.transitionDuration && localTime < clip.transitionDuration) {
+                      const progress = localTime / clip.transitionDuration;
+                      switch (clip.transitionType) {
+                        case "cross-zoom":
+                          transitionScale = 0.5 + 0.5 * progress;
+                          break;
+                        case "whip-pan":
+                          transitionTranslateX = 100 * Math.pow(1 - progress, 3);
+                          break;
+                        case "film-burn":
+                          transitionBrightness = 2 * (1 - Math.abs(0.5 - progress) * 2);
+                          break;
+                        case "zoom-in":
+                          transitionScale = 1 + 0.5 * (1 - progress);
+                          break;
+                        case "slideleft":
+                          transitionTranslateX = 100 * (1 - progress);
+                          break;
+                        case "slideright":
+                          transitionTranslateX = -100 * (1 - progress);
+                          break;
+                        case "flash-white":
+                          transitionBrightness = 1 - progress;
+                          break;
+                        case "glitch":
+                          transitionTranslateX = 5 * Math.sin(progress * 50);
+                          break;
+                      }
+                    }
+
+                    const brightnessVal = 1 + clip.brightness + transitionBrightness;
+                    const hasFilter = brightnessVal !== 1 || clip.contrast !== 1 || clip.saturate !== 1 || clip.sepia !== 0 || clip.hueRotate !== 0;
+                    const filterStr = hasFilter ? `brightness(${brightnessVal}) contrast(${clip.contrast}) saturate(${clip.saturate}) sepia(${clip.sepia}) hue-rotate(${clip.hueRotate}deg)` : undefined;
                     
                     const activeAnims = clip.animations?.length ? clip.animations : 
                       (clip.animationType && clip.animationType !== "none" ? [{ type: clip.animationType, speed: clip.animationSpeed, intensity: clip.animationIntensity } as AnimationDef] : []);
@@ -5976,9 +6692,10 @@ export default function VideoEditorPage() {
                     let animY = animProps.y;
                     previewOpacity *= animProps.opacityMultiplier;
 
-                    const hasTransform = clip.x !== 0 || clip.y !== 0 || clip.videoZoom !== 1 || animScaleX !== 1 || animScaleY !== 1 || animRotate !== 0 || animX !== 0 || animY !== 0;
+                    const scaleYToUse = clip.videoScaleY ?? clip.videoZoom;
+                    const hasTransform = clip.x !== 0 || clip.y !== 0 || clip.videoZoom !== 1 || scaleYToUse !== 1 || animScaleX !== 1 || animScaleY !== 1 || animRotate !== 0 || animX !== 0 || animY !== 0 || transitionScale !== 1 || transitionTranslateX !== 0;
                     const transformStr = hasTransform 
-                      ? `translate(${clip.x + animX}%, ${clip.y + animY}%) scale(${clip.videoZoom * animScaleX}, ${clip.videoZoom * animScaleY}) rotate(${animRotate}deg)` 
+                      ? `translate(${clip.x + animX + transitionTranslateX}%, ${clip.y + animY}%) scale(${clip.videoZoom * animScaleX * transitionScale}, ${scaleYToUse * animScaleY * transitionScale}) rotate(${animRotate}deg)` 
                       : undefined;
 
                     if (clip.type === "ticker") {
@@ -6079,40 +6796,56 @@ export default function VideoEditorPage() {
 
                     if (clip.type === "image") {
                       return (
-                        <img
-                          key={clip.id}
+                        <div key={clip.id} className="absolute inset-0 pointer-events-none" style={{ zIndex: clip.isForeground ? 20 + i : i }}>
+                          <img
+                            ref={(el) => { if (el) videoRefs.current[clip.id] = el; else delete videoRefs.current[clip.id]; }}
+                            src={clip.url}
+                            className="absolute w-full h-full object-contain transition-transform"
+                            style={{ 
+                              filter: filterStr,
+                              transform: transformStr,
+                              opacity: previewOpacity,
+                              mixBlendMode: clip.opacity !== undefined && clip.opacity < 1 ? (isLightTheme ? "multiply" : "screen") : "normal"
+                            }}
+                            crossOrigin="anonymous"
+                          />
+                          {clip.cinematicEffect === "film-grain" && <div className="absolute inset-0 opacity-30 mix-blend-overlay pointer-events-none" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E")' }}></div>}
+                          {clip.cinematicEffect === "vignette" && <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(circle, transparent 50%, rgba(0,0,0,0.8) 150%)' }}></div>}
+                          {clip.cinematicEffect === "letterbox" && (
+                            <>
+                              <div className="absolute top-0 w-full h-[12.5%] bg-black pointer-events-none"></div>
+                              <div className="absolute bottom-0 w-full h-[12.5%] bg-black pointer-events-none"></div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={clip.id} className="absolute inset-0 pointer-events-none" style={{ zIndex: clip.isForeground ? 20 + i : i }}>
+                        <video
                           ref={(el) => { if (el) videoRefs.current[clip.id] = el; else delete videoRefs.current[clip.id]; }}
                           src={clip.url}
-                          className="absolute w-full h-full object-contain transition-transform pointer-events-none"
+                          className="absolute w-full h-full object-contain transition-transform"
                           style={{ 
-                            zIndex: clip.isForeground ? 20 + i : i,
                             filter: filterStr,
                             transform: transformStr,
                             opacity: previewOpacity,
                             mixBlendMode: clip.opacity !== undefined && clip.opacity < 1 ? (isLightTheme ? "multiply" : "screen") : "normal"
                           }}
                           crossOrigin="anonymous"
+                          playsInline
+                          muted
                         />
-                      );
-                    }
-
-                    return (
-                      <video
-                        key={clip.id}
-                        ref={(el) => { if (el) videoRefs.current[clip.id] = el; else delete videoRefs.current[clip.id]; }}
-                        src={clip.url}
-                        className="absolute w-full h-full object-contain transition-transform pointer-events-none"
-                        style={{ 
-                          zIndex: clip.isForeground ? 20 + i : i,
-                          filter: filterStr,
-                          transform: transformStr,
-                          opacity: previewOpacity,
-                          mixBlendMode: clip.opacity !== undefined && clip.opacity < 1 ? (isLightTheme ? "multiply" : "screen") : "normal"
-                        }}
-                        crossOrigin="anonymous"
-                        playsInline
-                        muted
-                      />
+                        {clip.cinematicEffect === "film-grain" && <div className="absolute inset-0 opacity-30 mix-blend-overlay pointer-events-none" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E")' }}></div>}
+                        {clip.cinematicEffect === "vignette" && <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(circle, transparent 50%, rgba(0,0,0,0.8) 150%)' }}></div>}
+                        {clip.cinematicEffect === "letterbox" && (
+                          <>
+                            <div className="absolute top-0 w-full h-[12.5%] bg-black pointer-events-none"></div>
+                            <div className="absolute bottom-0 w-full h-[12.5%] bg-black pointer-events-none"></div>
+                          </>
+                        )}
+                      </div>
                     );
                   })}
                   {audioClips.map(audio => (
@@ -6172,22 +6905,35 @@ export default function VideoEditorPage() {
                 <canvas id="fabric-canvas" />
               </div>
 
-              {/* Floating Image Actions */}
-              {selectedObj && selectedObj.type === "image" && !selectedObj.id?.toString().startsWith('video-') && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
-                  <button onClick={() => {
-                    setCropTargetObj(selectedObj as fabric.Image);
-                    setCropImageUrl((selectedObj as fabric.Image).getSrc());
-                    setIsCropModalOpen(true);
-                  }} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-full shadow-xl flex items-center gap-2 transition-all hover:scale-105 border border-indigo-400/30">
-                    <CropIcon className="w-4 h-4" />
-                    Crop Image
+              {/* Floating Object Actions */}
+              {selectedObj && !selectedObj.id?.toString().startsWith('video-') && (
+                <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex gap-1 p-1 bg-zinc-900/90 backdrop-blur border border-zinc-700/50 rounded-lg shadow-xl">
+                  <button onClick={() => handleFitToCanvas('contain')} className="px-2 py-1 hover:bg-zinc-800 text-zinc-300 hover:text-white text-[10px] font-medium rounded flex items-center gap-1 transition-colors" title="Shrink to fit inside canvas">
+                    <Minimize2 className="w-3 h-3" />
+                    Shrink to Fit
                   </button>
-                  <label className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white text-xs font-semibold rounded-full shadow-xl flex items-center gap-2 transition-all hover:scale-105 border border-pink-400/30 cursor-pointer">
-                    <ImageIcon className="w-4 h-4" />
-                    Replace
-                    <input type="file" accept="image/*" className="hidden" onChange={handleReplaceImage} />
-                  </label>
+                  <button onClick={() => handleFitToCanvas('cover')} className="px-2 py-1 hover:bg-zinc-800 text-zinc-300 hover:text-white text-[10px] font-medium rounded flex items-center gap-1 transition-colors" title="Scale to fill canvas">
+                    <Maximize2 className="w-3 h-3" />
+                    Fill Canvas
+                  </button>
+                  {selectedObj.type === "image" && (
+                    <>
+                      <div className="w-px h-3 bg-zinc-700 self-center mx-1" />
+                      <button onClick={() => {
+                        setCropTargetObj(selectedObj as fabric.Image);
+                        setCropImageUrl((selectedObj as fabric.Image).getSrc());
+                        setIsCropModalOpen(true);
+                      }} className="px-2 py-1 hover:bg-zinc-800 text-zinc-300 hover:text-white text-[10px] font-medium rounded flex items-center gap-1 transition-colors" title="Crop image">
+                        <CropIcon className="w-3 h-3" />
+                        Crop
+                      </button>
+                      <label className="px-2 py-1 hover:bg-zinc-800 text-zinc-300 hover:text-white text-[10px] font-medium rounded flex items-center gap-1 transition-colors cursor-pointer" title="Replace image">
+                        <ImageIcon className="w-3 h-3" />
+                        Replace
+                        <input type="file" accept="image/*" className="hidden" onChange={handleReplaceImage} />
+                      </label>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -6413,7 +7159,7 @@ export default function VideoEditorPage() {
             {/* Volume */}
             <div className="flex items-center gap-2">
               <Volume2 className="w-4 h-4 text-zinc-500" />
-              <input type="range" min={0} max={1} step={0.05} value={masterVolume} onChange={e => {
+              <input type="range" min={0} max={1} step={0.05} value={Number.isNaN(masterVolume) ? 1 : masterVolume} onChange={e => {
                 setMasterVolume(+e.target.value);
               }} className="w-20 accent-indigo-500" />
             </div>
@@ -6429,7 +7175,7 @@ export default function VideoEditorPage() {
               </div>
               <div className="flex items-center gap-3 flex-1">
                 <label className="text-xs text-zinc-400 w-14">End: <span className="text-pink-400 font-mono">{(selectedClip.trimEnd || selectedClip.fileDuration).toFixed(1)}s</span></label>
-                <input type="range" min={0.5} max={selectedClip.fileDuration} step={0.1} value={selectedClip.trimEnd || selectedClip.fileDuration} onChange={e => { const v = +e.target.value; updateSelectedClip({ trimEnd: v }); setGlobalTime(selectedClip.startTime + selectedClip.duration); }} className="flex-1 accent-pink-500" />
+                <input type="range" min={0.5} max={selectedClip.fileDuration || 1} step={0.1} value={selectedClip.trimEnd || selectedClip.fileDuration || 0} onChange={e => { const v = +e.target.value; updateSelectedClip({ trimEnd: v }); setGlobalTime(selectedClip.startTime + selectedClip.duration); }} className="flex-1 accent-pink-500" />
               </div>
               <button onClick={() => { updateSelectedClip({ trimStart: 0, trimEnd: selectedClip.fileDuration }); showToast("Trim reset", "info"); }} className="text-xs text-zinc-500 hover:text-red-400 transition-colors">Reset</button>
             </div>
@@ -6519,7 +7265,7 @@ export default function VideoEditorPage() {
 
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-zinc-300">Font Size: {(activeFabricObj as any).fontSize}px</label>
-                        <input type="range" min={12} max={120} step={2} value={(activeFabricObj as any).fontSize || textSize} onChange={e => { setTextSize(+e.target.value); (activeFabricObj as any).set({ fontSize: +e.target.value }); fabricCanvasRef.current?.renderAll(); }} className="w-full accent-indigo-500" />
+                        <input type="range" min={12} max={120} step={2} value={(activeFabricObj as any).fontSize || textSize || 12} onChange={e => { setTextSize(+e.target.value); (activeFabricObj as any).set({ fontSize: +e.target.value }); fabricCanvasRef.current?.renderAll(); }} className="w-full accent-indigo-500" />
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-zinc-300">Text Color</label>
@@ -6632,7 +7378,7 @@ export default function VideoEditorPage() {
                     <div className="flex items-center gap-3">
                       <input 
                         type="range" min="0" max="1" step="0.05"
-                        value={activeFabricObj.opacity ?? 1}
+                        value={Number.isNaN(activeFabricObj.opacity) ? 1 : (activeFabricObj.opacity ?? 1)}
                         onChange={e => {
                           activeFabricObj.set('opacity', parseFloat(e.target.value));
                           fabricCanvasRef.current?.renderAll();
@@ -6682,7 +7428,7 @@ export default function VideoEditorPage() {
                           min={0}
                           max={Math.max(0, parseFloat(((activeFabricObj as any).endTime || totalDuration).toFixed(2)) - 0.1)}
                           step={0.1}
-                          value={parseFloat(((activeFabricObj as any).startTime || 0).toFixed(2))}
+                          value={parseFloat(((activeFabricObj as any).startTime || 0).toFixed(2)) || 0}
                           onChange={e => {
                             const newStart = parseFloat(e.target.value);
                             if (!isNaN(newStart)) {
@@ -6702,7 +7448,7 @@ export default function VideoEditorPage() {
                           min={parseFloat(((activeFabricObj as any).startTime || 0).toFixed(2)) + 0.1}
                           max={totalDuration}
                           step={0.1}
-                          value={parseFloat(((activeFabricObj as any).endTime || totalDuration).toFixed(2))}
+                          value={parseFloat(((activeFabricObj as any).endTime || totalDuration).toFixed(2)) || 0}
                           onChange={e => {
                             const newEnd = parseFloat(e.target.value);
                             if (!isNaN(newEnd)) {
@@ -6723,7 +7469,7 @@ export default function VideoEditorPage() {
                         min={0.1}
                         max={totalDuration - parseFloat(((activeFabricObj as any).startTime || 0).toFixed(2))}
                         step={0.1}
-                        value={parseFloat((((activeFabricObj as any).endTime || totalDuration) - ((activeFabricObj as any).startTime || 0)).toFixed(2))}
+                        value={parseFloat((((activeFabricObj as any).endTime || totalDuration) - ((activeFabricObj as any).startTime || 0)).toFixed(2)) || 0}
                         onChange={e => {
                           const newDur = parseFloat(e.target.value);
                           if (!isNaN(newDur) && newDur > 0) {
@@ -6746,6 +7492,22 @@ export default function VideoEditorPage() {
                       fabricCanvasRef.current?.renderAll(); 
                       refreshAssets(); 
                     }} 
+                  />
+                  <KeyframeListUI 
+                    keyframes={(activeFabricObj as any).keyframes || []} 
+                    onChange={kfs => { 
+                      (activeFabricObj as any).keyframes = kfs; 
+                      fabricCanvasRef.current?.renderAll(); 
+                      refreshAssets(); 
+                    }} 
+                    currentTime={Math.max(0, globalTime - ((activeFabricObj as any).startTime || 0))}
+                    currentProps={{
+                      x: activeFabricObj.left,
+                      y: activeFabricObj.top,
+                      videoZoom: activeFabricObj.scaleX,
+                      opacity: activeFabricObj.opacity,
+                      rotation: activeFabricObj.angle
+                    }}
                   />
 
                 </div>
@@ -6773,7 +7535,7 @@ export default function VideoEditorPage() {
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-zinc-300">Font Size</label>
                     <div className="flex items-center gap-3">
-                      <input type="range" min={12} max={120} step={2} value={textSize} onChange={e => setTextSize(+e.target.value)} className="flex-1 accent-indigo-500" />
+                      <input type="range" min={12} max={120} step={2} value={Number.isNaN(textSize) ? 12 : textSize} onChange={e => setTextSize(+e.target.value)} className="flex-1 accent-indigo-500" />
                       <span className="text-xs text-zinc-500 w-8 text-right">{textSize}px</span>
                     </div>
                   </div>
@@ -6910,7 +7672,7 @@ export default function VideoEditorPage() {
                       type="number"
                       min={0}
                       step={0.1}
-                      value={parseFloat((selectedClip.startTime || 0).toFixed(2))}
+                      value={parseFloat((selectedClip.startTime || 0).toFixed(2)) || 0}
                       onChange={e => {
                         const newStart = parseFloat(e.target.value);
                         if (!isNaN(newStart)) {
@@ -6928,7 +7690,7 @@ export default function VideoEditorPage() {
                     </div>
                     <input 
                       type="range" min={1} max={300} step={1} 
-                      value={selectedClip.duration} 
+                      value={Number.isNaN(selectedClip.duration) ? 1 : selectedClip.duration} 
                       onChange={e => {
                         const newDur = +e.target.value;
                         updateSelectedClip({ 
@@ -6944,7 +7706,7 @@ export default function VideoEditorPage() {
                       min={1}
                       max={300}
                       step={0.1}
-                      value={parseFloat((selectedClip.duration || 1).toFixed(2))}
+                      value={parseFloat((selectedClip.duration || 1).toFixed(2)) || 0}
                       onChange={e => {
                         const newDur = parseFloat(e.target.value);
                         if (!isNaN(newDur) && newDur >= 1) {
@@ -7049,10 +7811,22 @@ export default function VideoEditorPage() {
                   </div>
                 </div>
 
-                <div className="border-t border-zinc-800 pt-4 mt-4">
+                <div className="border-t border-zinc-800 pt-4 mt-4 space-y-4">
                   <AnimationListUI 
                     animations={selectedClip.animations || []} 
                     onChange={newAnims => updateSelectedClip({ animations: newAnims })} 
+                  />
+                  <KeyframeListUI 
+                    keyframes={selectedClip.keyframes || []} 
+                    onChange={kfs => updateSelectedClip({ keyframes: kfs })} 
+                    currentTime={Math.max(0, globalTime - selectedClip.startTime)}
+                    currentProps={{
+                      x: selectedClip.x,
+                      y: selectedClip.y,
+                      videoZoom: selectedClip.videoZoom,
+                      opacity: selectedClip.opacity ?? 1,
+                      rotation: selectedClip.rotation ?? 0
+                    }}
                   />
                 </div>
 
@@ -7104,7 +7878,7 @@ export default function VideoEditorPage() {
                       type="number"
                       min={0}
                       step={0.1}
-                      value={parseFloat((selectedClip.startTime || 0).toFixed(2))}
+                      value={parseFloat((selectedClip.startTime || 0).toFixed(2)) || 0}
                       onChange={e => {
                         const newStart = parseFloat(e.target.value);
                         if (!isNaN(newStart)) {
@@ -7123,7 +7897,7 @@ export default function VideoEditorPage() {
                         min={0.5}
                         max={300}
                         step={0.1}
-                        value={parseFloat((selectedClip.duration || 5).toFixed(2))}
+                        value={parseFloat((selectedClip.duration || 5).toFixed(2)) || 0}
                         onChange={e => {
                           const newDur = parseFloat(e.target.value);
                           if (!isNaN(newDur) && newDur >= 0.5) {
@@ -7240,6 +8014,21 @@ export default function VideoEditorPage() {
                       </button>
                     ))}
                   </div>
+                  
+                  <div className="mt-4 space-y-2">
+                    <label className="text-xs font-medium text-zinc-300 flex items-center gap-1.5"><Film className="w-3 h-3" /> Cinematic Effect</label>
+                    <select 
+                      value={selectedClip.cinematicEffect || "none"} 
+                      onChange={e => updateSelectedClip({ cinematicEffect: e.target.value as any })} 
+                      className="w-full bg-zinc-800 text-zinc-200 text-sm rounded-md px-2 py-1.5 border border-zinc-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+                    >
+                      <option value="none">None</option>
+                      <option value="film-grain">Film Grain / Noise</option>
+                      <option value="letterbox">Letterbox (2.35:1 Cinematic Bars)</option>
+                      <option value="vignette">Vignette (Dark Edges)</option>
+                      <option value="rgb-split">RGB Split (Chromatic Aberration)</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div className="border-t border-zinc-800 pt-4 space-y-4 mt-4">
@@ -7270,7 +8059,11 @@ export default function VideoEditorPage() {
                         </optgroup>
                         <optgroup label="Cinematic & Ads">
                           <option value="flash-white">Flash to White</option>
+                          <option value="film-burn">Film Burn / Light Leak</option>
                           <option value="zoom-in">Zoom In Reveal</option>
+                          <option value="cross-zoom">Cross Zoom</option>
+                          <option value="whip-pan">Whip Pan</option>
+                          <option value="glitch">Digital Glitch</option>
                         </optgroup>
                       </select>
                     </div>
@@ -7293,10 +8086,22 @@ export default function VideoEditorPage() {
                   </div>
                 </div>
 
-                <div className="border-t border-zinc-800 pt-4 mt-4">
+                <div className="border-t border-zinc-800 pt-4 mt-4 space-y-4">
                   <AnimationListUI 
                     animations={selectedClip.animations || []} 
                     onChange={newAnims => updateSelectedClip({ animations: newAnims })} 
+                  />
+                  <KeyframeListUI 
+                    keyframes={selectedClip.keyframes || []} 
+                    onChange={kfs => updateSelectedClip({ keyframes: kfs })} 
+                    currentTime={Math.max(0, globalTime - selectedClip.startTime)}
+                    currentProps={{
+                      x: selectedClip.x,
+                      y: selectedClip.y,
+                      videoZoom: selectedClip.videoZoom,
+                      opacity: selectedClip.opacity ?? 1,
+                      rotation: selectedClip.rotation ?? 0
+                    }}
                   />
                 </div>
 
@@ -7336,7 +8141,8 @@ export default function VideoEditorPage() {
                     { label: "Speed",      value: selectedClip.playbackRate || 1, min: 0.1, max: 4.0, step: 0.1, display: selectedClip.playbackRate || 1, prop: 'playbackRate' as const, isSpeed: true },
                     { label: "X Position", value: selectedClip.x, min: -100, max: 100, step: 1, display: selectedClip.x, prop: 'x' as const },
                     { label: "Y Position", value: selectedClip.y, min: -100, max: 100, step: 1, display: selectedClip.y, prop: 'y' as const },
-                    { label: "Zoom",       value: selectedClip.videoZoom,  min: 0.1,  max: 3, step: 0.05, display: Math.round((selectedClip.videoZoom - 1) * 100), prop: 'videoZoom' as const },
+                    { label: "Scale X",    value: selectedClip.videoZoom,  min: 0.1,  max: 3, step: 0.05, display: Math.round((selectedClip.videoZoom - 1) * 100), prop: 'videoZoom' as const },
+                    { label: "Scale Y",    value: selectedClip.videoScaleY ?? selectedClip.videoZoom,  min: 0.1,  max: 3, step: 0.05, display: Math.round(((selectedClip.videoScaleY ?? selectedClip.videoZoom) - 1) * 100), prop: 'videoScaleY' as const },
                     { label: "Brightness", value: selectedClip.brightness, min: -1, max: 1, step: 0.05, display: Math.round(selectedClip.brightness * 100), prop: 'brightness' as const },
                     { label: "Contrast",   value: selectedClip.contrast,   min: 0,  max: 2, step: 0.05, display: Math.round((selectedClip.contrast - 1) * 100), prop: 'contrast' as const },
                     { label: "Saturation", value: selectedClip.saturate,   min: 0,  max: 3, step: 0.05, display: Math.round((selectedClip.saturate - 1) * 100), prop: 'saturate' as const },
@@ -7349,7 +8155,7 @@ export default function VideoEditorPage() {
                       <input 
                         type="range" 
                         min={min} max={max} step={step}
-                        value={value}
+                        value={Number.isNaN(value) ? min : value}
                         onChange={(e) => { updateSelectedClip({ [prop]: parseFloat(e.target.value) }); setActiveFilterId("custom"); }}
                         className="w-full h-1.5 accent-indigo-500" 
                       />
@@ -7375,7 +8181,7 @@ export default function VideoEditorPage() {
                     </div>
                   )}
                   <button 
-                    onClick={() => { updateSelectedClip({ videoZoom: 1, x: 0, y: 0, brightness: 0, contrast: 1, saturate: 1, sepia: 0, hueRotate: 0 }); setActiveFilterId("none"); }}
+                    onClick={() => { updateSelectedClip({ videoZoom: 1, videoScaleY: 1, x: 0, y: 0, brightness: 0, contrast: 1, saturate: 1, sepia: 0, hueRotate: 0 }); setActiveFilterId("none"); }}
                     className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-lg text-xs font-semibold transition-colors mt-4"
                   >
                     ↺ Reset All Filters
@@ -7448,7 +8254,7 @@ export default function VideoEditorPage() {
                     <input 
                       type="range" 
                       min="0" max="2" step="0.1" 
-                      value={activeAudio.volume ?? 1} 
+                      value={Number.isNaN(activeAudio.volume) ? 1 : (activeAudio.volume ?? 1)} 
                       onChange={(e) => setAudioClips(prev => prev.map(a => a.id === selectedAudioClipId ? { ...a, volume: +e.target.value } : a))} 
                       className="w-full accent-emerald-500 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
                     />
@@ -7517,7 +8323,7 @@ export default function VideoEditorPage() {
                       <label className="text-zinc-400">Tolerance</label>
                       <span className="text-zinc-500 tabular-nums">{selectedClip.chromaKeySimilarity.toFixed(2)}</span>
                     </div>
-                    <input type="range" min={0.01} max={1} step={0.01} value={selectedClip.chromaKeySimilarity} onChange={e => updateSelectedClip({ chromaKeySimilarity: +e.target.value })} className="w-full h-1.5 accent-emerald-500" />
+                    <input type="range" min={0.01} max={1} step={0.01} value={Number.isNaN(selectedClip.chromaKeySimilarity) ? 0.05 : selectedClip.chromaKeySimilarity} onChange={e => updateSelectedClip({ chromaKeySimilarity: +e.target.value })} className="w-full h-1.5 accent-emerald-500" />
                   </div>
                   <p className="text-[10px] text-emerald-400/70 italic">Applied automatically during video export.</p>
                 </>
@@ -7527,8 +8333,27 @@ export default function VideoEditorPage() {
         </div>
       </div>
 
-        {/* BOTTOM - TIMELINE */}
-        <div className="h-[35vh] md:h-52 min-h-[150px] max-h-[50vh] bg-zinc-950 border-t border-zinc-800 flex flex-col shrink-0 z-20">
+      {/* RESIZE DIVIDER */}
+      {!isTimelineLocked && (
+        <div 
+          className="h-1 w-full bg-zinc-800 hover:bg-indigo-500 cursor-row-resize z-50 transition-colors shrink-0"
+          onMouseDown={(e) => {
+            isDraggingTimelineRef.current = true;
+            timelineStartYRef.current = e.clientY;
+            const el = document.getElementById("timeline-container");
+            timelineStartHeightRef.current = el ? el.offsetHeight : timelineHeight;
+            setIsAutoFit(false);
+            document.body.style.cursor = 'row-resize';
+          }}
+        />
+      )}
+
+      {/* BOTTOM - TIMELINE */}
+      <div 
+        id="timeline-container"
+        style={{ height: isTimelineLocked ? undefined : timelineHeight }}
+        className={`bg-zinc-950 border-t border-zinc-800 flex flex-col shrink-0 z-20 ${isTimelineLocked ? 'h-[35vh] md:h-52 min-h-[150px] max-h-[50vh]' : 'overflow-hidden'}`}
+      >
 
           {/* TIMELINE TOOLBAR */}
           <div className="h-9 border-b border-zinc-800 flex items-center px-4 justify-between bg-zinc-900 shrink-0">
@@ -7570,13 +8395,29 @@ export default function VideoEditorPage() {
               </button>
             </div>
             <div className="flex-1 flex flex-col justify-center max-w-md mx-4">
-              <input type="range" min={0} max={totalDuration || 1} step={0.01} value={globalTime} onChange={handleSeek}
+              <input type="range" min={0} max={totalDuration || 1} step={0.01} value={Number.isNaN(globalTime) ? 0 : globalTime} onChange={handleSeek}
                 className="w-full h-1 bg-zinc-800 rounded-full appearance-none cursor-pointer accent-indigo-500" />
             </div>
             <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1 bg-zinc-950 px-1 py-0.5 rounded border border-zinc-800">
+                <button 
+                  onClick={() => setIsAutoFit(!isAutoFit)} 
+                  className={`p-1 rounded transition-colors ${isAutoFit ? 'bg-indigo-500/20 text-indigo-400' : 'hover:bg-zinc-800 text-zinc-400 hover:text-white'}`} 
+                  title="Auto-Fit Timeline Height to Tracks"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </button>
+                <button 
+                  onClick={() => setIsTimelineLocked(!isTimelineLocked)} 
+                  className={`p-1 rounded transition-colors ${isTimelineLocked ? 'bg-amber-500/20 text-amber-400' : 'hover:bg-zinc-800 text-zinc-400 hover:text-white'}`} 
+                  title="Lock Timeline Height"
+                >
+                  {isTimelineLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                </button>
+              </div>
               <div className="flex items-center gap-2 bg-zinc-950 px-2 py-1 rounded-md border border-zinc-800">
                 <span className="text-[10px] text-zinc-500 font-bold uppercase">Zoom</span>
-                <input type="range" min={0.1} max={5} step={0.1} value={timelineZoom} onChange={e => setTimelineZoom(+e.target.value)} className="w-20 h-1 accent-indigo-500" />
+                <input type="range" min={0.1} max={5} step={0.1} value={Number.isNaN(timelineZoom) ? 1 : timelineZoom} onChange={e => setTimelineZoom(+e.target.value)} className="w-20 h-1 accent-indigo-500" />
               </div>
               <div className="text-xs font-mono text-zinc-500 flex items-center gap-1">
                 {clips.length} clip{clips.length !== 1 ? "s" : ""} · 
@@ -7631,8 +8472,8 @@ export default function VideoEditorPage() {
                   } else if (data.type === "timeline_clip_drop") {
                     e.preventDefault();
                     const rect = e.currentTarget.getBoundingClientRect();
-                    const trackWidth = rect.width - 56;
-                    const dropX = Math.max(0, e.clientX - rect.left - 56);
+                    const trackWidth = rect.width - 48;
+                    const dropX = Math.max(0, e.clientX - rect.left - 48);
                     const dropTime = (dropX / trackWidth) * (totalDuration || 1);
                     
                     const newClipObj: VideoClip = { 
@@ -7642,7 +8483,7 @@ export default function VideoEditorPage() {
                       duration: data.payload.duration, trimStart: data.payload.trimStart, 
                       trimEnd: data.payload.trimEnd, trackId: videoTracks[0]?.id || "v1", 
                       color: `hsl(${Math.floor(Math.random()*360)}, 70%, 55%)`, 
-                      x: 0, y: 0, videoZoom: 1, brightness: 0, contrast: 1, saturate: 1, sepia: 0, hueRotate: 0, 
+                      x: 0, y: 0, videoZoom: 1, videoScaleY: 1, brightness: 0, contrast: 1, saturate: 1, sepia: 0, hueRotate: 0, 
                       enableChromaKey: false, chromaKeyColor: "#00ff00", chromaKeySimilarity: 0.3, 
                       playbackRate: 1, volume: 1, opacity: 1 
                     }; 
@@ -7654,13 +8495,16 @@ export default function VideoEditorPage() {
               }}
               onClick={(e) => { 
                 // Deselect if clicking empty space
-                if (e.target === e.currentTarget) setSelectedAssetId(null); 
+                if (e.target === e.currentTarget) {
+                  setSelectedAssetId(null); 
+                  setSelectedAssetIds([]);
+                }
                 
                 // If clicking on track area, seek to that position
                 if (e.target === e.currentTarget && tracksAreaRef.current) {
                   const rect = tracksAreaRef.current.getBoundingClientRect();
-                  const trackWidth = rect.width - 80;
-                  let newX = e.clientX - rect.left - 68;
+                  const trackWidth = rect.width - 72;
+                  let newX = e.clientX - rect.left - 60;
                   if (newX < 0) newX = 0;
                   if (newX > trackWidth) newX = trackWidth;
                   const newGlobalTime = (newX / trackWidth) * (totalDuration || 1);
@@ -7671,7 +8515,7 @@ export default function VideoEditorPage() {
 
             {/* Playhead Line */}
             <div className={`absolute top-0 bottom-0 w-px bg-red-500 z-50 pointer-events-none transition-opacity duration-150 ${isDraggingPlayhead ? 'opacity-100' : 'opacity-80'}`}
-              style={{ left: `calc(68px + calc(calc(100% - 80px) * ${globalTime / (totalDuration || 1)}))` }}>
+              style={{ left: `calc(60px + calc(calc(100% - 72px) * ${globalTime / (totalDuration || 1)}))` }}>
               <div 
                 onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingPlayhead(true); setIsPlaying(false); }}
                 className="absolute top-0 -translate-x-1/2 w-4 h-4 bg-red-500 rounded-sm cursor-ew-resize pointer-events-auto hover:scale-125 transition-transform" 
@@ -7679,12 +8523,12 @@ export default function VideoEditorPage() {
             </div>
 
             {/* VIDEO CLIP TRACKS */}
-            <div className="space-y-1">
+            <div className="space-y-1 mb-1">
               {videoTracks.map((track, tIdx) => (
                 <div 
                   key={track.id} 
                   data-track-id={track.id} 
-                  className="h-14 rounded-lg flex relative border border-zinc-800/50 bg-zinc-900/50 transition-colors hover:bg-zinc-800/80"
+                  className="h-12 rounded-lg flex relative border border-zinc-800/50 bg-zinc-900/50 transition-colors hover:bg-zinc-800/80"
                   onDragOver={(e) => {
                     e.preventDefault();
                     e.dataTransfer.dropEffect = "copy";
@@ -7696,8 +8540,8 @@ export default function VideoEditorPage() {
                       const data = JSON.parse(e.dataTransfer.getData("application/json"));
                       if (data.type === "timeline_clip_drop") {
                         const rect = e.currentTarget.getBoundingClientRect();
-                        const trackWidth = rect.width - 56;
-                        const dropX = Math.max(0, e.clientX - rect.left - 56);
+                        const trackWidth = rect.width - 48;
+                        const dropX = Math.max(0, e.clientX - rect.left - 48);
                         const dropTime = (dropX / trackWidth) * (totalDuration || 1);
                         
                         const isImage = data.payload.type === "image";
@@ -7709,7 +8553,7 @@ export default function VideoEditorPage() {
                           duration: data.payload.duration, trimStart: data.payload.trimStart || 0, 
                           trimEnd: data.payload.trimEnd || data.payload.duration, trackId: track.id, 
                           color: isImage ? "#e11d48" : `hsl(${Math.floor(Math.random()*360)}, 70%, 55%)`, 
-                          x: 0, y: 0, videoZoom: 1, brightness: 0, contrast: 1, saturate: 1, sepia: 0, hueRotate: 0, 
+                          x: 0, y: 0, videoZoom: 1, videoScaleY: 1, brightness: 0, contrast: 1, saturate: 1, sepia: 0, hueRotate: 0, 
                           enableChromaKey: false, chromaKeyColor: "#00ff00", chromaKeySimilarity: 0.3, 
                           playbackRate: 1, volume: isImage ? 0 : 1, opacity: 1 
                         }; 
@@ -7745,69 +8589,81 @@ export default function VideoEditorPage() {
                     } catch(err) {}
                   }}
                 >
-                  <div className="w-14 shrink-0 flex flex-col items-center justify-center bg-zinc-900 border-r border-zinc-800 rounded-l-lg z-10 gap-0.5 relative group">
-                    <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
-                    <span className="text-[9px] text-indigo-400 font-bold">{track.name}</span>
+                  <div className="w-12 shrink-0 flex flex-col items-center justify-center bg-zinc-900 border-r border-zinc-800 rounded-l-lg z-10 gap-0.5 relative group">
+                    <ImageIcon className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span className="text-[9px] text-indigo-400 font-bold leading-none">{track.name}</span>
+                    {tIdx === videoTracks.length - 1 && (
+                       <button onClick={() => {
+                           const vCount = videoTracks.filter(t => t.name.startsWith("V")).length;
+                           setVideoTracks([...videoTracks, { id: `v${Date.now()}`, name: `V${vCount + 1}` }]);
+                       }}
+                               className="w-4 h-4 shrink-0 bg-zinc-800 rounded flex items-center justify-center hover:bg-indigo-600 transition-colors shadow border border-zinc-700" title="Add Video Track">
+                          <Plus className="w-2.5 h-2.5 text-white" />
+                       </button>
+                    )}
                     
-                    <div className="flex gap-1 mt-0.5 relative z-30 flex-wrap justify-center px-1">
-                      <button 
-                        onClick={() => setVideoTracks(videoTracks.map(t => t.id === track.id ? { ...t, isHidden: !t.isHidden } : t))}
-                        className={`hover:text-white transition-colors p-0.5 ${track.isHidden ? 'text-zinc-600' : 'text-zinc-400'}`}
-                        title={track.isHidden ? "Show Track" : "Hide Track"}
-                      >
-                        {track.isHidden ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                      </button>
-                      <button 
-                        onClick={() => setVideoTracks(videoTracks.map(t => t.id === track.id ? { ...t, isMuted: !t.isMuted } : t))}
-                        className={`hover:text-white transition-colors p-0.5 ${track.isMuted ? 'text-red-400' : 'text-zinc-400'}`}
-                        title={track.isMuted ? "Unmute Track" : "Mute Track"}
-                      >
-                        {track.isMuted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
-                      </button>
-                      <div className="w-full h-px bg-zinc-800/50 my-0.5"></div>
-                      <button 
-                        onClick={() => {
-                          const trackClips = clips.filter(c => c.trackId === track.id);
-                          if (trackClips.length > 0) setSelectedClipIds(trackClips.map(c => c.id));
-                        }}
-                        className="hover:text-indigo-400 transition-colors p-0.5 text-zinc-400"
-                        title="Select All Clips in Track"
-                      >
-                        <MousePointerSquareDashed className="w-3 h-3" />
-                      </button>
-                      <button 
-                        onClick={() => {
-                          let targetIds = selectedClipIds;
-                          const trackClips = clips.filter(c => c.trackId === track.id);
-                          if (targetIds.length === 0 || !targetIds.some(id => trackClips.some(c => c.id === id))) {
-                              targetIds = trackClips.map(c => c.id);
-                          } else {
-                              targetIds = targetIds.filter(id => trackClips.some(c => c.id === id));
-                          }
-                          if (targetIds.length === 0) return;
-                          
-                          const sortedIds = trackClips.filter(c => targetIds.includes(c.id))
-                                                      .sort((a, b) => a.startTime - b.startTime)
-                                                      .map(c => c.id);
-                          
-                          setClips(prev => {
-                             let currentTime = 0;
-                             const updated = [...prev];
-                             for (const sid of sortedIds) {
-                                const idx = updated.findIndex(c => c.id === sid);
-                                if (idx !== -1) {
-                                   updated[idx] = { ...updated[idx], startTime: currentTime };
-                                   currentTime += updated[idx].duration;
-                                }
-                             }
-                             return updated;
-                          });
-                        }}
-                        className="hover:text-green-400 transition-colors p-0.5 text-zinc-400"
-                        title="Arrange Clips Sequentially (Fit)"
-                      >
-                        <AlignLeft className="w-3 h-3" />
-                      </button>
+                    {/* Action buttons (shown smartly on hover) */}
+                    <div className="absolute left-full pl-1.5 top-1/2 -translate-y-1/2 z-50 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all scale-95 group-hover:scale-100 hidden group-hover:block">
+                      <div className="bg-zinc-800 border border-zinc-700 rounded-md shadow-xl flex items-center gap-1 p-1">
+                        <button 
+                          onClick={() => setVideoTracks(videoTracks.map(t => t.id === track.id ? { ...t, isHidden: !t.isHidden } : t))}
+                          className={`hover:text-white transition-colors p-1.5 rounded hover:bg-zinc-700 ${track.isHidden ? 'text-zinc-500' : 'text-zinc-300'}`}
+                          title={track.isHidden ? "Show Track" : "Hide Track"}
+                        >
+                          {track.isHidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                        <button 
+                          onClick={() => setVideoTracks(videoTracks.map(t => t.id === track.id ? { ...t, isMuted: !t.isMuted } : t))}
+                          className={`hover:text-white transition-colors p-1.5 rounded hover:bg-zinc-700 ${track.isMuted ? 'text-red-400' : 'text-zinc-300'}`}
+                          title={track.isMuted ? "Unmute Track" : "Mute Track"}
+                        >
+                          {track.isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                        </button>
+                        <div className="w-px h-4 bg-zinc-700 mx-0.5"></div>
+                        <button 
+                          onClick={() => {
+                            const trackClips = clips.filter(c => c.trackId === track.id);
+                            if (trackClips.length > 0) setSelectedClipIds(trackClips.map(c => c.id));
+                          }}
+                          className="hover:text-indigo-400 hover:bg-zinc-700 rounded transition-colors p-1.5 text-zinc-300"
+                          title="Select All Clips in Track"
+                        >
+                          <MousePointerSquareDashed className="w-3.5 h-3.5" />
+                        </button>
+                        <button 
+                          onClick={() => {
+                            let targetIds = selectedClipIds;
+                            const trackClips = clips.filter(c => c.trackId === track.id);
+                            if (targetIds.length === 0 || !targetIds.some(id => trackClips.some(c => c.id === id))) {
+                                targetIds = trackClips.map(c => c.id);
+                            } else {
+                                targetIds = targetIds.filter(id => trackClips.some(c => c.id === id));
+                            }
+                            if (targetIds.length === 0) return;
+                            
+                            const sortedIds = trackClips.filter(c => targetIds.includes(c.id))
+                                                        .sort((a, b) => a.startTime - b.startTime)
+                                                        .map(c => c.id);
+                            
+                            setClips(prev => {
+                               let currentTime = 0;
+                               const updated = [...prev];
+                               for (const sid of sortedIds) {
+                                  const idx = updated.findIndex(c => c.id === sid);
+                                  if (idx !== -1) {
+                                     updated[idx] = { ...updated[idx], startTime: currentTime };
+                                     currentTime += updated[idx].duration;
+                                  }
+                               }
+                               return updated;
+                            });
+                          }}
+                          className="hover:text-green-400 hover:bg-zinc-700 rounded transition-colors p-1.5 text-zinc-300"
+                          title="Arrange Clips Sequentially (Fit)"
+                        >
+                          <AlignLeft className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     {videoTracks.length > 1 && (
@@ -7823,15 +8679,7 @@ export default function VideoEditorPage() {
                       </button>
                     )}
 
-                    {tIdx === videoTracks.length - 1 && (
-                       <button onClick={() => {
-                           const vCount = videoTracks.filter(t => t.name.startsWith("V")).length;
-                           setVideoTracks([...videoTracks, { id: `v${Date.now()}`, name: `V${vCount + 1}` }]);
-                       }}
-                               className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 z-20 w-5 h-5 bg-zinc-800 rounded flex items-center justify-center hover:bg-indigo-600 transition-colors shadow border border-zinc-700" title="Add Video Track">
-                          <Plus className="w-3 h-3 text-white" />
-                       </button>
-                    )}
+
                   </div>
                   <div className="flex-1 relative overflow-hidden p-1">
                     {clips.filter(c => c.trackId === track.id).map(clip => {
@@ -7857,6 +8705,7 @@ export default function VideoEditorPage() {
                              }
                              setSelectedClipIds(newSelection);
                              setSelectedAssetId(null);
+                             setSelectedAssetIds([]);
                              setSelectedAudioClipId(null);
                              setActiveTab("adjust");
                              setClipDragState({
@@ -7877,6 +8726,7 @@ export default function VideoEditorPage() {
                                  fabricCanvasRef.current?.renderAll();
                                  if (!selectedClipIds.includes(clip.id)) setSelectedClipIds([clip.id]);
                                  setSelectedAssetId(null);
+                                 setSelectedAssetIds([]);
                                  setSelectedAudioClipId(null);
                                  setActiveTab("adjust");
                                  setClipDragState({ clipId: clip.id, type: 'trimStart', startX: e.clientX, initialStart: clip.startTime, initialDuration: clip.duration, initialTrimStart: clip.trimStart || 0, initialTrimEnd: clip.trimEnd || clip.fileDuration, fileDuration: clip.fileDuration, initialTotalDuration: totalDuration || 1 });
@@ -7889,6 +8739,7 @@ export default function VideoEditorPage() {
                                  fabricCanvasRef.current?.renderAll();
                                  if (!selectedClipIds.includes(clip.id)) setSelectedClipIds([clip.id]);
                                  setSelectedAssetId(null);
+                                 setSelectedAssetIds([]);
                                  setSelectedAudioClipId(null);
                                  setActiveTab("adjust");
                                  setClipDragState({ clipId: clip.id, type: 'trimEnd', startX: e.clientX, initialStart: clip.startTime, initialDuration: clip.duration, initialTrimStart: clip.trimStart || 0, initialTrimEnd: clip.trimEnd || clip.fileDuration, fileDuration: clip.fileDuration, initialTotalDuration: totalDuration || 1 });
@@ -7939,8 +8790,8 @@ export default function VideoEditorPage() {
             </div>
 
             {/* AUDIO TRACK */}
-            <div className="h-12 bg-zinc-900/50 rounded-lg flex relative border border-zinc-800/50">
-              <div className="w-14 shrink-0 bg-zinc-900 border-r border-zinc-800 flex flex-col items-center justify-center z-10 rounded-l-lg gap-0.5">
+            <div className="h-10 bg-zinc-900/50 rounded-lg flex relative border border-zinc-800/50 mb-1">
+              <div className="w-12 shrink-0 bg-zinc-900 border-r border-zinc-800 flex flex-col items-center justify-center z-10 rounded-l-lg gap-0.5">
                 <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
                 <span className="text-[9px] text-emerald-400 font-bold">AUD</span>
               </div>
@@ -7963,6 +8814,7 @@ export default function VideoEditorPage() {
                                setSelectedAudioClipId(audio.id);
                                setSelectedClipIds([]);
                                setSelectedAssetId(null);
+                               setSelectedAssetIds([]);
                                fabricCanvasRef.current?.discardActiveObject();
                                fabricCanvasRef.current?.renderAll();
                                const type = e.shiftKey ? 'slip' : 'move';
@@ -8063,8 +8915,8 @@ export default function VideoEditorPage() {
             </div>
 
             {/* CANVAS ASSETS TRACK */}
-            <div className="min-h-12 bg-zinc-900/50 rounded-lg border border-zinc-800/50 flex relative">
-              <div className="w-14 shrink-0 bg-zinc-900 border-r border-zinc-800 flex flex-col items-center justify-center z-10 rounded-l-lg gap-0.5 relative group">
+            <div className="min-h-10 bg-zinc-900/50 rounded-lg border border-zinc-800/50 flex relative">
+              <div className="w-12 shrink-0 bg-zinc-900 border-r border-zinc-800 flex flex-col items-center justify-center z-10 rounded-l-lg gap-0.5 relative group">
                 <Layers className="w-3.5 h-3.5 text-amber-400" />
                 <span className="text-[9px] text-amber-400 font-bold">ASSETS</span>
                 <div className="absolute inset-x-0 bottom-0 top-0 flex flex-col items-center justify-center gap-1 bg-zinc-900 opacity-0 group-hover:opacity-100 transition-opacity rounded-l-lg z-20">
@@ -8087,15 +8939,33 @@ export default function VideoEditorPage() {
                           e.stopPropagation();
                           const canvas = fabricCanvasRef.current;
                           if (!canvas) return;
+                          
+                          const allFitted = selectedAssetIds.every(id => {
+                              const asset = canvasAssets.find(a => a.id === id);
+                              return asset && asset.obj && (asset.obj as any)._originalStartTime !== undefined;
+                          });
+
                           selectedAssetIds.forEach(id => {
                               const asset = canvasAssets.find(a => a.id === id);
                               if (asset && asset.obj) {
-                                  (asset.obj as any).startTime = 0;
-                                  (asset.obj as any).endTime = Math.max(10, totalDuration);
+                                  const obj = asset.obj as any;
+                                  if (allFitted) {
+                                      obj.startTime = obj._originalStartTime;
+                                      obj.endTime = obj._originalEndTime;
+                                      delete obj._originalStartTime;
+                                      delete obj._originalEndTime;
+                                  } else {
+                                      if (obj._originalStartTime === undefined) {
+                                          obj._originalStartTime = obj.startTime;
+                                          obj._originalEndTime = obj.endTime;
+                                      }
+                                      obj.startTime = 0;
+                                      obj.endTime = Math.max(10, totalDuration);
+                                  }
                               }
                           });
                           refreshAssets();
-                          showToast(`Fitted ${selectedAssetIds.length} object${selectedAssetIds.length > 1 ? 's' : ''} to track`, "success");
+                          showToast(allFitted ? `Restored ${selectedAssetIds.length} object${selectedAssetIds.length > 1 ? 's' : ''}` : `Fitted ${selectedAssetIds.length} object${selectedAssetIds.length > 1 ? 's' : ''} to track`, "success");
                       }}
                       className="w-11 h-5 bg-amber-500/20 hover:bg-amber-500 text-[8px] font-bold tracking-wider text-amber-400 hover:text-white rounded border border-amber-500/50 flex items-center justify-center transition-colors"
                       title="Fit selected objects to full track length"
@@ -8106,119 +8976,162 @@ export default function VideoEditorPage() {
                 </div>
               </div>
               <div id="asset-tracks-container" className="flex-1 relative overflow-hidden p-1 min-h-[48px]">
-                {canvasAssets.map(asset => {
-                  const leftPct = (asset.startTime / (totalDuration || 1)) * 100;
-                  const widthPct = ((asset.endTime - asset.startTime) / (totalDuration || 1)) * 100;
-                  const isSelected = selectedAssetIds.includes(asset.id);
-                  
-                  return (
-                    <div 
-                      key={asset.id} 
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                        setSelectedClipIds([]);
-                        setSelectedAudioClipId(null);
-                        
-                        if (e.shiftKey || e.ctrlKey || e.metaKey) {
-                           setSelectedAssetIds(prev => prev.includes(asset.id) ? prev.filter(id => id !== asset.id) : [...prev, asset.id]);
-                           setSelectedAssetId(asset.id);
-                        } else {
-                           setSelectedAssetIds([asset.id]);
-                           setSelectedAssetId(asset.id);
-                        }
-                        
-                        setActiveTab("adjust");
-                        if (asset.obj) {
-                          fabricCanvasRef.current?.setActiveObject(asset.obj);
-                          setSelectedObj(asset.obj);
-                          if (asset.id.startsWith("shp-")) setLeftPanel("shapes");
-                          else if (asset.id.startsWith("txt-")) setLeftPanel("text");
-                          else if (asset.id.startsWith("stk-")) setLeftPanel("stickers");
-                          else if (asset.id.startsWith("img-")) setLeftPanel("logo");
-                        }
-                        if (globalTime < asset.startTime || globalTime > asset.endTime) {
-                          handleSeek({ target: { value: asset.startTime.toString() } } as any);
-                        } else {
-                          fabricCanvasRef.current?.renderAll();
-                        }
-                        setAssetDragState({
-                          assetId: asset.id,
-                          type: 'move',
-                          startX: e.clientX,
-                          initialStart: asset.startTime,
-                          initialEnd: asset.endTime
-                        });
-                      }}
-                      className={`absolute top-1 bottom-1 rounded-md flex items-center px-1.5 cursor-move transition-colors shadow-sm group ${isSelected ? 'bg-amber-500/30 border border-amber-400/60 ring-1 ring-amber-400 z-10' : 'bg-zinc-800 border border-zinc-700 hover:bg-zinc-700'}`}
-                      style={{ left: `${leftPct}%`, width: `${widthPct}%`, minWidth: '8px' }}
-                    >
-                      {/* Left Trim Handle */}
-                      <div 
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                          setSelectedClipIds([]);
-                          setSelectedAudioClipId(null);
-                          setSelectedAssetId(asset.id);
-                          if (!selectedAssetIds.includes(asset.id)) {
-                             setSelectedAssetIds([asset.id]);
-                          }
-                          if (asset.obj) {
-                            fabricCanvasRef.current?.setActiveObject(asset.obj);
-                            setSelectedObj(asset.obj);
-                          }
-                          if (globalTime < asset.startTime || globalTime > asset.endTime) {
-                            handleSeek({ target: { value: asset.startTime.toString() } } as any);
-                          } else {
-                            fabricCanvasRef.current?.renderAll();
-                          }
-                          setAssetDragState({ assetId: asset.id, type: 'trimStart', startX: e.clientX, initialStart: asset.startTime, initialEnd: asset.endTime });
-                        }}
-                        className={`absolute left-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-amber-400/50 rounded-l-md ${isSelected ? 'bg-amber-400/30' : 'bg-zinc-600/50 opacity-0 group-hover:opacity-100'}`}
-                      />
-                      
-                      <span className={`text-[10px] font-medium truncate ml-2 pointer-events-none ${isSelected ? 'text-amber-200' : 'text-zinc-300'}`}>{asset.label}</span>
-
-                      <button 
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          fabricCanvasRef.current?.remove(asset.obj);
-                          fabricCanvasRef.current?.renderAll();
-                          if (selectedAssetId === asset.id) setSelectedAssetId(null);
-                          setSelectedAssetIds(prev => prev.filter(id => id !== asset.id));
-                          refreshAssets();
-                        }} 
-                        className="ml-auto w-4 h-4 rounded hover:bg-red-600 text-zinc-400 hover:text-white flex items-center justify-center transition-colors shrink-0 z-20"
-                      >
-                        <X className="w-2.5 h-2.5" />
-                      </button>
-
-                      {/* Right Trim Handle */}
-                      <div 
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                          setSelectedClipIds([]);
-                          setSelectedAudioClipId(null);
-                          setSelectedAssetId(asset.id);
-                          if (!selectedAssetIds.includes(asset.id)) {
-                             setSelectedAssetIds([asset.id]);
-                          }
-                          if (asset.obj) {
-                            fabricCanvasRef.current?.setActiveObject(asset.obj);
-                            setSelectedObj(asset.obj);
-                          }
-                          if (globalTime < asset.startTime || globalTime > asset.endTime) {
-                            handleSeek({ target: { value: asset.endTime.toString() } } as any);
-                          } else {
-                            fabricCanvasRef.current?.renderAll();
-                          }
-                          setAssetDragState({ assetId: asset.id, type: 'trimEnd', startX: e.clientX, initialStart: asset.startTime, initialEnd: asset.endTime });
-                        }}
-                        className={`absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-amber-400/50 rounded-r-md ${isSelected ? 'bg-amber-400/30' : 'bg-zinc-600/50 opacity-0 group-hover:opacity-100'}`}
-                      />
-                    </div>
-                  );
-                })}
+                {(() => {
+                   const sorted = [...canvasAssets].sort((a, b) => a.startTime - b.startTime);
+                   const layers: number[] = [];
+                   const assignment: Record<string, number> = {};
+                   for (const asset of sorted) {
+                       let placed = false;
+                       for (let i = 0; i < layers.length; i++) {
+                           if (asset.startTime >= layers[i]) {
+                               assignment[asset.id] = i;
+                               layers[i] = asset.endTime;
+                               placed = true;
+                               break;
+                           }
+                       }
+                       if (!placed) {
+                           assignment[asset.id] = layers.length;
+                           layers.push(asset.endTime);
+                       }
+                   }
+                   
+                   return (
+                     <div className="relative w-full h-full" style={{ minHeight: `${Math.max(1, layers.length) * 36}px` }}>
+                       {canvasAssets.map(asset => {
+                         const leftPct = (asset.startTime / (totalDuration || 1)) * 100;
+                         const widthPct = ((asset.endTime - asset.startTime) / (totalDuration || 1)) * 100;
+                         const isSelected = selectedAssetIds.includes(asset.id);
+                         const layer = assignment[asset.id] || 0;
+                         
+                         return (
+                           <div 
+                             key={asset.id} 
+                             onMouseDown={(e) => {
+                               e.stopPropagation();
+                               setSelectedClipIds([]);
+                               setSelectedAudioClipId(null);
+                               
+                               if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                                  setSelectedAssetIds(prev => prev.includes(asset.id) ? prev.filter(id => id !== asset.id) : [...prev, asset.id]);
+                                  setSelectedAssetId(asset.id);
+                               } else {
+                                  setSelectedAssetIds([asset.id]);
+                                  setSelectedAssetId(asset.id);
+                               }
+                               
+                               setActiveTab("adjust");
+                               if (asset.obj) {
+                                 setSelectedObj(asset.obj);
+                                 if (asset.id.startsWith("shp-")) setLeftPanel("shapes");
+                                 else if (asset.id.startsWith("txt-")) setLeftPanel("text");
+                                 else if (asset.id.startsWith("stk-")) setLeftPanel("stickers");
+                                 else if (asset.id.startsWith("img-")) setLeftPanel("logo");
+                               }
+                               if (globalTime < asset.startTime || globalTime > asset.endTime) {
+                                 handleSeek({ target: { value: asset.startTime.toString() } } as any);
+                               } else {
+                                 fabricCanvasRef.current?.renderAll();
+                               }
+                               setAssetDragState({
+                                 assetId: asset.id,
+                                 type: 'move',
+                                 startX: e.clientX,
+                                 initialStart: asset.startTime,
+                                 initialEnd: asset.endTime
+                               });
+                             }}
+                             className={`absolute rounded-md flex items-center px-1.5 cursor-move transition-colors shadow-sm group ${isSelected ? 'bg-amber-500/30 border border-amber-400/60 ring-1 ring-amber-400 z-10' : 'bg-zinc-800 border border-zinc-700 hover:bg-zinc-700'}`}
+                             style={{ left: `${leftPct}%`, width: `${widthPct}%`, minWidth: '8px', top: `${layer * 36 + 4}px`, height: '28px' }}
+                           >
+                             {/* Left Trim Handle */}
+                             <div 
+                               onMouseDown={(e) => {
+                                 e.stopPropagation();
+                                 setSelectedClipIds([]);
+                                 setSelectedAudioClipId(null);
+                                 setSelectedAssetId(asset.id);
+                                 if (!selectedAssetIds.includes(asset.id)) {
+                                    setSelectedAssetIds([asset.id]);
+                                 }
+                                 if (asset.obj) {
+                                   setSelectedObj(asset.obj);
+                                 }
+                                 if (globalTime < asset.startTime || globalTime > asset.endTime) {
+                                   handleSeek({ target: { value: asset.startTime.toString() } } as any);
+                                 } else {
+                                   fabricCanvasRef.current?.renderAll();
+                                 }
+                                 setAssetDragState({ assetId: asset.id, type: 'trimStart', startX: e.clientX, initialStart: asset.startTime, initialEnd: asset.endTime });
+                               }}
+                               className={`absolute left-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-amber-400/50 rounded-l-md ${isSelected ? 'bg-amber-400/30' : 'bg-zinc-600/50 opacity-0 group-hover:opacity-100'}`}
+                             />
+                             <span className={`text-[10px] font-medium truncate ml-2 pointer-events-none ${isSelected ? 'text-amber-200' : 'text-zinc-300'}`}>{asset.label}</span>
+       
+                             <div className="ml-auto flex items-center gap-0.5 z-20">
+                               <button 
+                                 onMouseDown={(e) => e.stopPropagation()}
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   if (asset.obj) {
+                                     const newHiddenState = !asset.isHidden;
+                                     (asset.obj as any).userHidden = newHiddenState;
+                                     asset.obj.set('visible', !newHiddenState);
+                                     fabricCanvasRef.current?.renderAll();
+                                     refreshAssets();
+                                   }
+                                 }} 
+                                 className={`w-4 h-4 rounded hover:bg-zinc-600 text-zinc-400 hover:text-white flex items-center justify-center transition-colors shrink-0 ${asset.isHidden ? 'text-zinc-500' : 'text-zinc-300'}`}
+                                 title={asset.isHidden ? "Show Object" : "Hide Object"}
+                               >
+                                 {asset.isHidden ? <EyeOff className="w-2.5 h-2.5" /> : <Eye className="w-2.5 h-2.5" />}
+                               </button>
+       
+                               <button 
+                                 onMouseDown={(e) => e.stopPropagation()}
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   fabricCanvasRef.current?.remove(asset.obj);
+                                   fabricCanvasRef.current?.renderAll();
+                                   if (selectedAssetId === asset.id) setSelectedAssetId(null);
+                                   setSelectedAssetIds(prev => prev.filter(id => id !== asset.id));
+                                   refreshAssets();
+                                 }} 
+                                 className="w-4 h-4 rounded hover:bg-red-600 text-zinc-400 hover:text-white flex items-center justify-center transition-colors shrink-0"
+                                 title="Remove Object"
+                               >
+                                 <X className="w-2.5 h-2.5" />
+                               </button>
+                             </div>
+       
+                             {/* Right Trim Handle */}
+                             <div 
+                               onMouseDown={(e) => {
+                                 e.stopPropagation();
+                                 setSelectedClipIds([]);
+                                 setSelectedAudioClipId(null);
+                                 setSelectedAssetId(asset.id);
+                                 if (!selectedAssetIds.includes(asset.id)) {
+                                    setSelectedAssetIds([asset.id]);
+                                 }
+                                 if (asset.obj) {
+                                   setSelectedObj(asset.obj);
+                                 }
+                                 if (globalTime < asset.startTime || globalTime > asset.endTime) {
+                                   handleSeek({ target: { value: asset.endTime.toString() } } as any);
+                                 } else {
+                                   fabricCanvasRef.current?.renderAll();
+                                 }
+                                 setAssetDragState({ assetId: asset.id, type: 'trimEnd', startX: e.clientX, initialStart: asset.startTime, initialEnd: asset.endTime });
+                               }}
+                               className={`absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-amber-400/50 rounded-r-md ${isSelected ? 'bg-amber-400/30' : 'bg-zinc-600/50 opacity-0 group-hover:opacity-100'}`}
+                             />
+                           </div>
+                         );
+                       })}
+                     </div>
+                   );
+                })()}
                 {canvasAssets.length === 0 && (
                   <div className="w-full h-full flex items-center justify-center opacity-50">
                     <span className="text-[10px] text-zinc-500 font-medium">Text, Stickers, and Logos appear here</span>
